@@ -493,4 +493,217 @@ class UserController extends Controller
             ], 500);
         }
     }
+
+    /**
+     * Get user's QR code for event check-in
+     */
+    public function getQRCode(Request $request)
+    {
+        try {
+            $user = Auth::user();
+            $profile = $user->profile;
+
+            if (!$profile || !$profile->qr_code) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'QR code belum tersedia. Silakan lengkapi profil Anda.'
+                ], 404);
+            }
+
+            // Generate QR code data with additional security
+            $qrData = [
+                'qr_code' => $profile->qr_code,
+                'user_id' => $user->id,
+                'user_name' => $profile->full_name,
+                'generated_at' => now()->toISOString(),
+                'expires_at' => now()->addHours(24)->toISOString(), // QR expires in 24 hours
+            ];
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'QR code berhasil diambil.',
+                'data' => [
+                    'qr_data' => $qrData,
+                    'qr_string' => $profile->qr_code, // For simple QR scanners
+                    'user_info' => [
+                        'name' => $profile->full_name,
+                        'photo' => $profile->profile_picture,
+                        'credit_score' => $user->credit_score,
+                    ]
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Terjadi kesalahan saat mengambil QR code.',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Regenerate user's QR code
+     */
+    public function regenerateQRCode(Request $request)
+    {
+        try {
+            $user = Auth::user();
+            $profile = $user->profile;
+
+            if (!$profile) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Profil tidak ditemukan.'
+                ], 404);
+            }
+
+            // Generate new QR code
+            $newQRCode = 'rackethub_' . $user->id . '_' . \Illuminate\Support\Str::random(8);
+            
+            $profile->update(['qr_code' => $newQRCode]);
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'QR code berhasil di-generate ulang.',
+                'data' => [
+                    'qr_code' => $newQRCode,
+                    'generated_at' => now()->toISOString(),
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Terjadi kesalahan saat generate ulang QR code.',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Upload profile picture
+     */
+    public function uploadProfilePicture(Request $request)
+    {
+        $user = Auth::user();
+
+        $request->validate([
+            'profile_picture' => 'required|image|mimes:jpeg,jpg,png,webp|max:2048', // Max 2MB
+        ]);
+
+        try {
+            // Delete old profile picture if exists
+            if ($user->profile && $user->profile->profile_photo_url) {
+                $oldPicturePath = storage_path('app/public/' . $user->profile->profile_photo_url);
+                if (file_exists($oldPicturePath)) {
+                    unlink($oldPicturePath);
+                }
+            }
+
+            // Store new profile picture
+            $uploadedFile = $request->file('profile_picture');
+            $fileName = 'profile_' . $user->id . '_' . time() . '.' . $uploadedFile->getClientOriginalExtension();
+            $filePath = $uploadedFile->storeAs('profile-pictures', $fileName, 'public');
+
+            // Update user profile with new picture path
+            $user->profile()->updateOrCreate(
+                ['user_id' => $user->id],
+                ['profile_photo_url' => $filePath]
+            );
+
+            $user->load('profile');
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Foto profile berhasil diupload!',
+                'data' => [
+                    'user' => $user,
+                    'profile_picture_url' => asset('storage/' . $filePath)
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Terjadi kesalahan saat mengupload foto profile.',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Delete profile picture
+     */
+    public function deleteProfilePicture(Request $request)
+    {
+        try {
+            $user = Auth::user();
+
+            if (!$user->profile || !$user->profile->profile_photo_url) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Tidak ada foto profile untuk dihapus.'
+                ], 404);
+            }
+
+            // Delete file from storage
+            $picturePath = storage_path('app/public/' . $user->profile->profile_photo_url);
+            if (file_exists($picturePath)) {
+                unlink($picturePath);
+            }
+
+            // Update profile to remove picture reference
+            $user->profile->update(['profile_photo_url' => null]);
+            $user->load('profile');
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Foto profile berhasil dihapus!',
+                'data' => [
+                    'user' => $user
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Terjadi kesalahan saat menghapus foto profile.',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Get profile picture URL
+     */
+    public function getProfilePictureUrl(User $user)
+    {
+        try {
+            if (!$user->profile || !$user->profile->profile_photo_url) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'User tidak memiliki foto profile.'
+                ], 404);
+            }
+
+            $profilePictureUrl = asset('storage/' . $user->profile->profile_photo_url);
+
+            return response()->json([
+                'status' => 'success',
+                'data' => [
+                    'profile_picture_url' => $profilePictureUrl,
+                    'user_id' => $user->id,
+                    'full_name' => $user->profile->full_name
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Terjadi kesalahan saat mengambil foto profile.',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
 }

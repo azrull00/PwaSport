@@ -14,6 +14,7 @@ class Community extends Model
         'host_user_id',
         'name',
         'description',
+        'icon_url',
         'community_type',
         'location_name',
         'city',
@@ -93,5 +94,26 @@ class Community extends Model
         $this->average_skill_rating = $this->ratings()->avg('skill_rating') ?? 0;
         $this->hospitality_rating = $this->ratings()->avg('hospitality_rating') ?? 0;
         $this->save();
+    }
+
+    // Image accessors
+    public function getIconUrlAttribute($value)
+    {
+        if (!$value) {
+            return null;
+        }
+        
+        // If already a full URL, return as is
+        if (str_starts_with($value, 'http')) {
+            return $value;
+        }
+        
+        // Otherwise prepend storage URL
+        return asset('storage/' . $value);
+    }
+
+    public function getHasIconAttribute()
+    {
+        return !empty($this->attributes['icon_url']);
     }
 }

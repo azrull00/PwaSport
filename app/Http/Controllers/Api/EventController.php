@@ -10,6 +10,8 @@ use App\Models\Community;
 use App\Services\EmailNotificationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\ValidationException;
 use Carbon\Carbon;
 
 class EventController extends Controller
@@ -77,7 +79,7 @@ class EventController extends Controller
                 $allBlockedIds = array_merge($blockedUserIds, $blockedByUserIds);
                 
                 if (!empty($allBlockedIds)) {
-                    $query->whereNotIn('host_user_id', $allBlockedIds);
+                    $query->whereNotIn('host_id', $allBlockedIds);
                 }
             }
 
@@ -128,7 +130,7 @@ class EventController extends Controller
             $event = Event::create([
                 'community_id' => $request->community_id,
                 'sport_id' => $request->sport_id,
-                'host_user_id' => $user->id,
+                'host_id' => $user->id,
                 'title' => $request->title,
                 'description' => $request->description,
                 'event_type' => $request->event_type,
@@ -371,7 +373,7 @@ class EventController extends Controller
     {
         try {
             // Only host can check-in participants
-            if ($event->host_user_id !== Auth::id()) {
+            if ($event->host_id !== Auth::id()) {
                 return response()->json([
                     'status' => 'error',
                     'message' => 'Hanya host yang dapat melakukan check-in.'
@@ -395,6 +397,243 @@ class EventController extends Controller
             return response()->json([
                 'status' => 'error',
                 'message' => 'Terjadi kesalahan saat check-in peserta.',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Check-in participant via QR scan
+     */
+    public function checkInParticipantByQR(Request $request, Event $event)
+    {
+        try {
+            $request->validate([
+                'qr_code' => 'required|string',
+            ]);
+
+            $user = Auth::user();
+
+            // Only host can check-in participants
+            if ($event->host_id !== $user->id) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Hanya host yang dapat melakukan check-in.'
+                ], 403);
+            }
+
+            // Find user by QR code
+            $userProfile = \App\Models\UserProfile::where('qr_code', $request->qr_code)->first();
+            if (!$userProfile) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'QR code tidak valid atau tidak ditemukan.'
+                ], 404);
+            }
+
+            // Find participant record
+            $participant = EventParticipant::where([
+                'event_id' => $event->id,
+                'user_id' => $userProfile->user_id,
+            ])->first();
+
+            if (!$participant) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Player tidak terdaftar untuk event ini.',
+                    'data' => [
+                        'player_name' => $userProfile->full_name,
+                        'player_id' => $userProfile->user_id,
+                    ]
+                ], 404);
+            }
+
+            // Check if already checked in
+            if ($participant->status === 'checked_in') {
+                return response()->json([
+                    'status' => 'warning',
+                    'message' => 'Player sudah di-check-in sebelumnya.',
+                    'data' => [
+                        'participant' => $participant->load('user.profile'),
+                        'checked_in_at' => $participant->checked_in_at,
+                    ]
+                ], 200);
+            }
+
+            // Check if participant can be checked in
+            if (!$participant->canCheckIn()) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => "Player tidak dapat di-check-in. Status saat ini: {$participant->status}",
+                    'data' => [
+                        'participant' => $participant->load('user.profile'),
+                        'current_status' => $participant->status,
+                    ]
+                ], 422);
+            }
+
+            // Perform check-in
+            $participant->update([
+                'status' => 'checked_in',
+                'checked_in_at' => now(),
+            ]);
+
+            // Send real-time notification to event participants
+            broadcast(new \App\Events\EventUpdated($event, 'participant_checked_in', [
+                'participant' => $participant->load('user.profile'),
+                'message' => "{$userProfile->full_name} telah check-in ke event."
+            ]));
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Player berhasil di-check-in via QR scan!',
+                'data' => [
+                    'participant' => $participant->load('user.profile'),
+                    'check_in_method' => 'qr_scan',
+                    'checked_in_at' => $participant->checked_in_at,
+                ]
+            ]);
+
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            throw $e; // Let validation exceptions bubble up for proper 422 response
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Terjadi kesalahan saat QR check-in.',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Bulk check-in multiple participants (manual mode)
+     */
+    public function bulkCheckInParticipants(Request $request, Event $event)
+    {
+        try {
+            $request->validate([
+                'participant_ids' => 'required|array',
+                'participant_ids.*' => 'exists:event_participants,id',
+            ]);
+
+            $user = Auth::user();
+
+            // Only host can check-in participants
+            if ($event->host_id !== $user->id) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Hanya host yang dapat melakukan check-in.'
+                ], 403);
+            }
+
+            $participants = EventParticipant::whereIn('id', $request->participant_ids)
+                ->where('event_id', $event->id)
+                ->get();
+
+            $checkedIn = [];
+            $errors = [];
+
+            foreach ($participants as $participant) {
+                if ($participant->canCheckIn()) {
+                    $participant->update([
+                        'status' => 'checked_in',
+                        'checked_in_at' => now(),
+                    ]);
+                    $checkedIn[] = $participant->load('user.profile');
+                } else {
+                    $errors[] = [
+                        'participant_id' => $participant->id,
+                        'user_name' => $participant->user->profile->full_name,
+                        'reason' => "Status tidak valid: {$participant->status}",
+                    ];
+                }
+            }
+
+            // Send real-time notification
+            if (count($checkedIn) > 0) {
+                broadcast(new \App\Events\EventUpdated($event, 'bulk_check_in', [
+                    'checked_in_count' => count($checkedIn),
+                    'message' => count($checkedIn) . ' peserta berhasil di-check-in.'
+                ]));
+            }
+
+            return response()->json([
+                'status' => 'success',
+                'message' => count($checkedIn) . ' peserta berhasil di-check-in.',
+                'data' => [
+                    'checked_in' => $checkedIn,
+                    'errors' => $errors,
+                    'total_checked_in' => count($checkedIn),
+                    'total_errors' => count($errors),
+                ]
+            ]);
+
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            throw $e; // Let validation exceptions bubble up for proper 422 response
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Terjadi kesalahan saat bulk check-in.',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Get event check-in statistics
+     */
+    public function getCheckInStats(Event $event)
+    {
+        try {
+            $user = Auth::user();
+
+            // Only host can view check-in stats
+            if ($event->host_id !== $user->id) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Hanya host yang dapat melihat statistik check-in.'
+                ], 403);
+            }
+
+            $stats = [
+                'total_registered' => $event->participants()->count(),
+                'checked_in' => $event->participants()->where('status', 'checked_in')->count(),
+                'confirmed_not_checked' => $event->participants()->where('status', 'confirmed')->count(),
+                'waiting_list' => $event->participants()->where('status', 'waiting')->count(),
+                'no_show' => $event->participants()->where('status', 'no_show')->count(),
+                'cancelled' => $event->participants()->where('status', 'cancelled')->count(),
+            ];
+
+            $stats['check_in_rate'] = $stats['total_registered'] > 0 
+                ? round(($stats['checked_in'] / $stats['total_registered']) * 100, 2) 
+                : 0;
+
+            // Get recent check-ins (last 10)
+            $recentCheckIns = $event->participants()
+                ->where('status', 'checked_in')
+                ->with('user.profile')
+                ->orderBy('checked_in_at', 'desc')
+                ->take(10)
+                ->get();
+
+            return response()->json([
+                'status' => 'success',
+                'data' => [
+                    'statistics' => $stats,
+                    'recent_check_ins' => $recentCheckIns,
+                    'event_info' => [
+                        'id' => $event->id,
+                        'title' => $event->title,
+                        'event_date' => $event->event_date,
+                        'max_participants' => $event->max_participants,
+                    ]
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Terjadi kesalahan saat mengambil statistik check-in.',
                 'error' => $e->getMessage()
             ], 500);
         }
@@ -453,7 +692,7 @@ class EventController extends Controller
             $user = Auth::user();
 
             // Only host can update event
-            if ($event->host_user_id !== $user->id) {
+            if ($event->host_id !== $user->id) {
                 return response()->json([
                     'status' => 'error',
                     'message' => 'Hanya host yang dapat mengubah event.'
@@ -491,7 +730,7 @@ class EventController extends Controller
             $user = Auth::user();
 
             // Only host can delete event
-            if ($event->host_user_id !== $user->id) {
+            if ($event->host_id !== $user->id) {
                 return response()->json([
                     'status' => 'error',
                     'message' => 'Hanya host yang dapat menghapus event.'
@@ -521,7 +760,7 @@ class EventController extends Controller
     {
         try {
             // Only host can confirm participants
-            if ($event->host_user_id !== Auth::id()) {
+            if ($event->host_id !== Auth::id()) {
                 return response()->json([
                     'status' => 'error',
                     'message' => 'Hanya host yang dapat mengkonfirmasi peserta.'
@@ -554,7 +793,7 @@ class EventController extends Controller
     {
         try {
             // Only host can reject participants
-            if ($event->host_user_id !== Auth::id()) {
+            if ($event->host_id !== Auth::id()) {
                 return response()->json([
                     'status' => 'error',
                     'message' => 'Hanya host yang dapat menolak peserta.'
@@ -572,6 +811,141 @@ class EventController extends Controller
             return response()->json([
                 'status' => 'error',
                 'message' => 'Terjadi kesalahan saat menolak peserta.',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Upload event thumbnail
+     */
+    public function uploadThumbnail(Request $request, Event $event)
+    {
+        try {
+            $user = Auth::user();
+            
+            // Check if user is the host
+            if ($event->host_id !== $user->id) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Hanya host yang dapat mengupload thumbnail event.'
+                ], 403);
+            }
+
+            // Validate file
+            $request->validate([
+                'thumbnail' => 'required|image|mimes:jpeg,jpg,png,webp|max:5120' // 5MB max
+            ]);
+
+            // Delete old thumbnail if exists
+            if ($event->getRawOriginal('thumbnail_url')) {
+                $oldPath = str_replace('storage/', '', parse_url($event->getRawOriginal('thumbnail_url'), PHP_URL_PATH));
+                if (Storage::disk('public')->exists($oldPath)) {
+                    Storage::disk('public')->delete($oldPath);
+                }
+            }
+
+            // Store new thumbnail
+            $file = $request->file('thumbnail');
+            $filename = 'event_' . $event->id . '_' . time() . '.' . $file->getClientOriginalExtension();
+            $path = $file->storeAs('event-thumbnails', $filename, 'public');
+
+            // Update event
+            $event->update(['thumbnail_url' => $path]);
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Thumbnail event berhasil diupload!',
+                'data' => [
+                    'thumbnail_url' => $event->fresh()->thumbnail_url,
+                    'has_thumbnail' => true
+                ]
+            ]);
+
+        } catch (ValidationException $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Data tidak valid.',
+                'errors' => $e->errors()
+            ], 422);
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Terjadi kesalahan saat mengupload thumbnail.',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Delete event thumbnail
+     */
+    public function deleteThumbnail(Event $event)
+    {
+        try {
+            $user = Auth::user();
+            
+            // Check if user is the host
+            if ($event->host_id !== $user->id) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Hanya host yang dapat menghapus thumbnail event.'
+                ], 403);
+            }
+
+            // Check if thumbnail exists
+            if (!$event->getRawOriginal('thumbnail_url')) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Event tidak memiliki thumbnail.'
+                ], 404);
+            }
+
+            // Delete thumbnail file
+            $oldPath = str_replace('storage/', '', parse_url($event->getRawOriginal('thumbnail_url'), PHP_URL_PATH));
+            if (Storage::disk('public')->exists($oldPath)) {
+                Storage::disk('public')->delete($oldPath);
+            }
+
+            // Update event
+            $event->update(['thumbnail_url' => null]);
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Thumbnail event berhasil dihapus!',
+                'data' => [
+                    'thumbnail_url' => null,
+                    'has_thumbnail' => false
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Terjadi kesalahan saat menghapus thumbnail.',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Get event thumbnail URL
+     */
+    public function getThumbnail(Event $event)
+    {
+        try {
+            return response()->json([
+                'status' => 'success',
+                'data' => [
+                    'thumbnail_url' => $event->thumbnail_url,
+                    'has_thumbnail' => $event->has_thumbnail
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Terjadi kesalahan saat mengambil thumbnail.',
                 'error' => $e->getMessage()
             ], 500);
         }

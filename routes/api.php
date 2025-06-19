@@ -31,6 +31,11 @@ Route::prefix('auth')->group(function () {
 // Public sports routes
 Route::get('sports', [SportController::class, 'index']);
 
+// Public image access routes (no auth required)
+Route::get('users/{user}/profile-picture', [UserController::class, 'getProfilePictureUrl']);
+Route::get('communities/{community}/icon', [CommunityController::class, 'getIcon']);
+Route::get('events/{event}/thumbnail', [EventController::class, 'getThumbnail']);
+
 // Protected routes
 Route::middleware('auth:sanctum')->group(function () {
     
@@ -45,6 +50,15 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::prefix('users')->group(function () {
         Route::get('/', [UserController::class, 'index']);
         Route::get('/blocked', [UserController::class, 'getBlockedUsers']);
+        
+        // QR Code management (must be before {user} routes)
+        Route::get('/my-qr-code', [UserController::class, 'getQRCode']);
+        Route::post('/regenerate-qr', [UserController::class, 'regenerateQRCode']);
+        
+        // Profile Picture management (must be before {user} routes)
+        Route::post('/upload-profile-picture', [UserController::class, 'uploadProfilePicture']);
+        Route::delete('/delete-profile-picture', [UserController::class, 'deleteProfilePicture']);
+        
         Route::get('/{user}', [UserController::class, 'show']);
         Route::put('/{user}', [UserController::class, 'update']);
         Route::delete('/{user}', [UserController::class, 'destroy']);
@@ -78,6 +92,15 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::put('/{event}/participants/{participant}/confirm', [EventController::class, 'confirmParticipant']);
         Route::put('/{event}/participants/{participant}/reject', [EventController::class, 'rejectParticipant']);
         Route::post('/{event}/check-in/{participant}', [EventController::class, 'checkInParticipant']);
+        
+        // QR-based check-in (host only)
+        Route::post('/{event}/check-in-qr', [EventController::class, 'checkInParticipantByQR']);
+        Route::post('/{event}/bulk-check-in', [EventController::class, 'bulkCheckInParticipants']);
+        Route::get('/{event}/check-in-stats', [EventController::class, 'getCheckInStats']);
+        
+        // Event thumbnail management (host only)
+        Route::post('/{event}/upload-thumbnail', [EventController::class, 'uploadThumbnail']);
+        Route::delete('/{event}/delete-thumbnail', [EventController::class, 'deleteThumbnail']);
     });
 
     // Communities routes
@@ -94,6 +117,10 @@ Route::middleware('auth:sanctum')->group(function () {
         
         // Community events
         Route::get('/{community}/events', [CommunityController::class, 'getEvents']);
+        
+        // Community icon management (host only)
+        Route::post('/{community}/upload-icon', [CommunityController::class, 'uploadIcon']);
+        Route::delete('/{community}/delete-icon', [CommunityController::class, 'deleteIcon']);
     });
 
     // Notifications routes

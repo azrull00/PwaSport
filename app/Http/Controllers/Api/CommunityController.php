@@ -9,6 +9,8 @@ use App\Models\CommunityRating;
 use App\Services\EmailNotificationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\ValidationException;
 
 class CommunityController extends Controller
 {
@@ -414,5 +416,140 @@ class CommunityController extends Controller
             'average_skill_rating' => round($avgSkillRating, 2),
             'hospitality_rating' => round($avgHospitalityRating, 2),
         ]);
+    }
+
+    /**
+     * Upload community icon
+     */
+    public function uploadIcon(Request $request, Community $community)
+    {
+        try {
+            $user = Auth::user();
+            
+            // Check if user is the host
+            if ($community->host_user_id !== $user->id) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Hanya host yang dapat mengupload icon komunitas.'
+                ], 403);
+            }
+
+            // Validate file
+            $request->validate([
+                'icon' => 'required|image|mimes:jpeg,jpg,png,webp,svg|max:2048'
+            ]);
+
+            // Delete old icon if exists
+            if ($community->getRawOriginal('icon_url')) {
+                $oldPath = str_replace('storage/', '', parse_url($community->getRawOriginal('icon_url'), PHP_URL_PATH));
+                if (Storage::disk('public')->exists($oldPath)) {
+                    Storage::disk('public')->delete($oldPath);
+                }
+            }
+
+            // Store new icon
+            $file = $request->file('icon');
+            $filename = 'community_' . $community->id . '_' . time() . '.' . $file->getClientOriginalExtension();
+            $path = $file->storeAs('community-icons', $filename, 'public');
+
+            // Update community
+            $community->update(['icon_url' => $path]);
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Icon komunitas berhasil diupload!',
+                'data' => [
+                    'icon_url' => $community->fresh()->icon_url,
+                    'has_icon' => true
+                ]
+            ]);
+
+        } catch (ValidationException $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Data tidak valid.',
+                'errors' => $e->errors()
+            ], 422);
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Terjadi kesalahan saat mengupload icon.',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Delete community icon
+     */
+    public function deleteIcon(Community $community)
+    {
+        try {
+            $user = Auth::user();
+            
+            // Check if user is the host
+            if ($community->host_user_id !== $user->id) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Hanya host yang dapat menghapus icon komunitas.'
+                ], 403);
+            }
+
+            // Check if icon exists
+            if (!$community->getRawOriginal('icon_url')) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Komunitas tidak memiliki icon.'
+                ], 404);
+            }
+
+            // Delete icon file
+            $oldPath = str_replace('storage/', '', parse_url($community->getRawOriginal('icon_url'), PHP_URL_PATH));
+            if (Storage::disk('public')->exists($oldPath)) {
+                Storage::disk('public')->delete($oldPath);
+            }
+
+            // Update community
+            $community->update(['icon_url' => null]);
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Icon komunitas berhasil dihapus!',
+                'data' => [
+                    'icon_url' => null,
+                    'has_icon' => false
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Terjadi kesalahan saat menghapus icon.',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Get community icon URL
+     */
+    public function getIcon(Community $community)
+    {
+        try {
+            return response()->json([
+                'status' => 'success',
+                'data' => [
+                    'icon_url' => $community->icon_url,
+                    'has_icon' => $community->has_icon
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Terjadi kesalahan saat mengambil icon.',
+                'error' => $e->getMessage()
+            ], 500);
+        }
     }
 }

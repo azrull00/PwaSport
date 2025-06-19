@@ -16,7 +16,7 @@ class UserProfile extends Model
         'bio',
         'date_of_birth',
         'gender',
-        'profile_picture',
+        'profile_photo_url',
         'qr_code',
         'city',
         'district',
@@ -53,5 +53,18 @@ class UserProfile extends Model
     public function getAgeAttribute()
     {
         return $this->date_of_birth ? $this->date_of_birth->age : null;
+    }
+
+    public function getProfilePictureUrlAttribute()
+    {
+        if ($this->profile_photo_url) {
+            return asset('storage/' . $this->profile_photo_url);
+        }
+        return null;
+    }
+
+    public function getHasProfilePictureAttribute()
+    {
+        return !empty($this->profile_photo_url);
     }
 }

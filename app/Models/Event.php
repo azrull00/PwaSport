@@ -17,6 +17,7 @@ class Event extends Model
         'venue_id',
         'title',
         'description',
+        'thumbnail_url',
         'event_date',
         'registration_deadline',
         'max_participants',
@@ -146,5 +147,26 @@ class Event extends Model
         }
 
         return true;
+    }
+
+    // Image accessors
+    public function getThumbnailUrlAttribute($value)
+    {
+        if (!$value) {
+            return null;
+        }
+        
+        // If already a full URL, return as is
+        if (str_starts_with($value, 'http')) {
+            return $value;
+        }
+        
+        // Otherwise prepend storage URL
+        return asset('storage/' . $value);
+    }
+
+    public function getHasThumbnailAttribute()
+    {
+        return !empty($this->attributes['thumbnail_url']);
     }
 }
