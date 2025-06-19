@@ -37,8 +37,7 @@ class EventUpdated implements ShouldBroadcast
     public function broadcastOn(): array
     {
         return [
-            new Channel('event.' . $this->event->id),
-            new Channel('sport.' . $this->event->sport_id),
+            new PrivateChannel('event-updates.' . $this->event->id),
         ];
     }
 

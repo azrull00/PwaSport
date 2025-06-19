@@ -3,7 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Events\ChatMessage;
+use App\Events\ChatMessageSent;
 use App\Events\EventUpdated;
 use App\Events\RealTimeNotification;
 use App\Models\Event;
@@ -76,13 +76,23 @@ class RealTimeController extends Controller
                 }
             }
 
+            // Prepare message data
+            $messageData = [
+                'message' => $request->message,
+                'message_type' => $request->message_type ?? 'text',
+                'created_at' => now()->toISOString(),
+            ];
+
+            // Determine channel type
+            $channelType = $eventId ? 'event' : 'community';
+            $channelId = $eventId ?? $communityId;
+
             // Broadcast the chat message
-            broadcast(new ChatMessage(
+            broadcast(new ChatMessageSent(
+                $messageData,
                 $user,
-                $request->message,
-                $eventId,
-                $communityId,
-                $request->message_type ?? 'text'
+                $channelType,
+                $channelId
             ))->toOthers();
 
             return response()->json([

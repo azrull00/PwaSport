@@ -12,7 +12,7 @@ use App\Models\Sport;
 use App\Models\EventParticipant;
 use Laravel\Sanctum\Sanctum;
 use Illuminate\Support\Facades\Event as EventFacade;
-use App\Events\ChatMessage;
+use App\Events\ChatMessageSent;
 use App\Events\EventUpdated;
 use App\Events\RealTimeNotification;
 
@@ -67,7 +67,7 @@ class RealTimeTest extends TestCase
                      'message' => 'Pesan berhasil dikirim.',
                  ]);
 
-        EventFacade::assertDispatched(ChatMessage::class);
+        EventFacade::assertDispatched(ChatMessageSent::class);
     }
 
     /**
@@ -109,7 +109,7 @@ class RealTimeTest extends TestCase
                      'message' => 'Pesan berhasil dikirim.',
                  ]);
 
-        EventFacade::assertDispatched(ChatMessage::class);
+        EventFacade::assertDispatched(ChatMessageSent::class);
     }
 
     /**
