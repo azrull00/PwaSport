@@ -20,6 +20,7 @@ class UserReport extends Model
         'status',
         'priority',
         'assigned_admin_id',
+        'assigned_to', // Alias for assigned_admin_id
         'admin_notes',
         'resolution',
         'resolved_at',
@@ -29,6 +30,17 @@ class UserReport extends Model
         'evidence' => 'array',
         'resolved_at' => 'datetime',
     ];
+
+    // Accessor and mutator for backward compatibility with 'assigned_to'
+    public function getAssignedToAttribute()
+    {
+        return $this->assigned_admin_id;
+    }
+
+    public function setAssignedToAttribute($value)
+    {
+        $this->attributes['assigned_admin_id'] = $value;
+    }
 
     // Relationships
     public function reporter()
@@ -47,22 +59,35 @@ class UserReport extends Model
     }
 
     /**
-     * Get the related model instance
+     * Get the related model instance using polymorphic relationship style
      */
-    public function related()
+    public function relatedModel()
     {
-        switch ($this->related_type) {
-            case 'event':
-                return $this->belongsTo(Event::class, 'related_id');
-            case 'match':
-                return $this->belongsTo(MatchHistory::class, 'related_id');
-            case 'community':
-                return $this->belongsTo(Community::class, 'related_id');
-            case 'rating':
-                return $this->belongsTo(PlayerRating::class, 'related_id');
-            default:
-                return null;
-        }
+        return $this->morphTo('related', 'related_type', 'related_id');
+    }
+
+    /**
+     * Get the event if related_type is event
+     */
+    public function event()
+    {
+        return $this->belongsTo(Event::class, 'related_id')->where('related_type', 'event');
+    }
+
+    /**
+     * Get the community if related_type is community
+     */
+    public function community()
+    {
+        return $this->belongsTo(Community::class, 'related_id')->where('related_type', 'community');
+    }
+
+    /**
+     * Get the match history if related_type is match
+     */
+    public function match()
+    {
+        return $this->belongsTo(MatchHistory::class, 'related_id')->where('related_type', 'match');
     }
 
     // Scopes

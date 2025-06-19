@@ -115,7 +115,15 @@ class ReportController extends Controller
 
             return response()->json([
                 'status' => 'success',
-                'data' => $reports
+                'data' => [
+                    'reports' => $reports->items(),
+                    'pagination' => [
+                        'current_page' => $reports->currentPage(),
+                        'total_pages' => $reports->lastPage(),
+                        'total_count' => $reports->total(),
+                        'per_page' => $reports->perPage()
+                    ]
+                ]
             ]);
 
         } catch (\Exception $e) {
@@ -142,7 +150,15 @@ class ReportController extends Controller
 
             return response()->json([
                 'status' => 'success',
-                'data' => $reports
+                'data' => [
+                    'reports' => $reports->items(),
+                    'pagination' => [
+                        'current_page' => $reports->currentPage(),
+                        'total_pages' => $reports->lastPage(),
+                        'total_count' => $reports->total(),
+                        'per_page' => $reports->perPage()
+                    ]
+                ]
             ]);
 
         } catch (\Exception $e) {
@@ -164,8 +180,7 @@ class ReportController extends Controller
             $report = UserReport::with([
                 'reporter.profile', 
                 'reportedUser.profile', 
-                'assignedAdmin.profile',
-                'related'
+                'assignedAdmin.profile'
             ])->findOrFail($reportId);
 
             // Check if user has access to this report
@@ -174,13 +189,15 @@ class ReportController extends Controller
                 !$user->hasRole('admin')) {
                 return response()->json([
                     'status' => 'error',
-                    'message' => 'Anda tidak memiliki akses ke laporan ini'
+                    'message' => 'Anda tidak memiliki akses ke report ini.'
                 ], 403);
             }
 
             return response()->json([
                 'status' => 'success',
-                'data' => $report
+                'data' => [
+                    'report' => $report
+                ]
             ]);
 
         } catch (\Exception $e) {
@@ -209,11 +226,18 @@ class ReportController extends Controller
             }
 
             // Check if report is still editable (24 hours after creation, and still pending)
-            if ($report->status !== 'pending' || $report->created_at->diffInHours(now()) > 24) {
+            if ($report->status !== 'pending') {
                 return response()->json([
                     'status' => 'error',
-                    'message' => 'Laporan ini sudah tidak dapat diubah'
-                ], 400);
+                    'message' => 'Report yang sudah diselesaikan tidak dapat diubah.'
+                ], 422);
+            }
+
+            if ($report->created_at->diffInHours(now()) > 24) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Report hanya dapat diubah dalam 24 jam setelah dibuat.'
+                ], 422);
             }
 
             $validator = Validator::make($request->all(), [
@@ -234,7 +258,7 @@ class ReportController extends Controller
 
             return response()->json([
                 'status' => 'success',
-                'message' => 'Laporan berhasil diperbarui',
+                'message' => 'Report berhasil diperbarui.',
                 'data' => $report->fresh()
             ]);
 
@@ -264,11 +288,18 @@ class ReportController extends Controller
             }
 
             // Check if report is still cancellable
-            if ($report->status !== 'pending' || $report->created_at->diffInHours(now()) > 24) {
+            if ($report->status !== 'pending') {
                 return response()->json([
                     'status' => 'error',
-                    'message' => 'Laporan ini sudah tidak dapat dibatalkan'
-                ], 400);
+                    'message' => 'Report yang sudah diselesaikan tidak dapat dibatalkan.'
+                ], 422);
+            }
+
+            if ($report->created_at->diffInHours(now()) > 24) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Report hanya dapat dibatalkan dalam 24 jam setelah dibuat.'
+                ], 422);
             }
 
             $report->update([
@@ -279,7 +310,7 @@ class ReportController extends Controller
 
             return response()->json([
                 'status' => 'success',
-                'message' => 'Laporan berhasil dibatalkan'
+                'message' => 'Report berhasil dibatalkan.'
             ]);
 
         } catch (\Exception $e) {
@@ -298,17 +329,36 @@ class ReportController extends Controller
         try {
             $user = Auth::user();
 
+            $submittedReports = UserReport::where('reporter_id', $user->id);
+            $receivedReports = UserReport::where('reported_user_id', $user->id);
+
+            // Get reports by type
+            $reportsByType = UserReport::where('reporter_id', $user->id)
+                ->selectRaw('report_type, COUNT(*) as count')
+                ->groupBy('report_type')
+                ->pluck('count', 'report_type')
+                ->toArray();
+
+            // Get reports by status
+            $reportsByStatus = UserReport::where('reporter_id', $user->id)
+                ->selectRaw('status, COUNT(*) as count')
+                ->groupBy('status')
+                ->pluck('count', 'status')
+                ->toArray();
+
             $stats = [
-                'reports_made' => [
-                    'total' => UserReport::where('reporter_id', $user->id)->count(),
-                    'pending' => UserReport::where('reporter_id', $user->id)->pending()->count(),
-                    'resolved' => UserReport::where('reporter_id', $user->id)->resolved()->count(),
+                'submitted_reports' => [
+                    'total' => $submittedReports->count(),
+                    'pending' => $submittedReports->where('status', 'pending')->count(),
+                    'resolved' => $submittedReports->where('status', 'resolved')->count(),
                 ],
-                'reports_received' => [
-                    'total' => UserReport::where('reported_user_id', $user->id)->count(),
-                    'pending' => UserReport::where('reported_user_id', $user->id)->pending()->count(),
-                    'resolved' => UserReport::where('reported_user_id', $user->id)->resolved()->count(),
+                'received_reports' => [
+                    'total' => $receivedReports->count(),
+                    'pending' => $receivedReports->where('status', 'pending')->count(),
+                    'resolved' => $receivedReports->where('status', 'resolved')->count(),
                 ],
+                'reports_by_type' => $reportsByType,
+                'reports_by_status' => $reportsByStatus,
                 'recent_activity' => UserReport::where(function($q) use ($user) {
                     $q->where('reporter_id', $user->id)
                       ->orWhere('reported_user_id', $user->id);

@@ -15,6 +15,8 @@ use App\Http\Controllers\Api\RealTimeController;
 use App\Http\Controllers\Api\LocationController;
 use App\Http\Controllers\Api\AdminController;
 use App\Http\Controllers\Api\ReportController;
+use App\Http\Controllers\Api\MatchmakingController;
+use App\Http\Controllers\Api\VenueController;
 
 Route::get('/user', function (Request $request) {
     return $request->user();
@@ -207,5 +209,26 @@ Route::middleware('auth:sanctum')->group(function () {
         
         // Admin Activity Logs
         Route::get('/activities', [AdminController::class, 'getAdminActivities']);
+    });
+
+    // Matchmaking System
+    Route::group(['middleware' => 'auth:sanctum'], function () {
+        Route::get('matchmaking/{eventId}', [MatchmakingController::class, 'getMatchmakingStatus']);
+        Route::post('matchmaking/{eventId}/generate', [MatchmakingController::class, 'generateEventMatchmaking']);
+        Route::post('matchmaking/{eventId}/save', [MatchmakingController::class, 'saveMatchmaking']);
+    });
+
+    // Venue Management
+    Route::group(['middleware' => 'auth:sanctum'], function () {
+        // Public venue routes (authenticated users)
+        Route::get('venues', [VenueController::class, 'index']);
+        Route::get('venues/{id}', [VenueController::class, 'show']);
+        Route::post('venues/{id}/check-availability', [VenueController::class, 'checkAvailability']);
+        Route::get('venues/{id}/schedule', [VenueController::class, 'getSchedule']);
+        
+        // Venue management (host/admin only)
+        Route::post('venues', [VenueController::class, 'store']);
+        Route::put('venues/{id}', [VenueController::class, 'update']);
+        Route::delete('venues/{id}', [VenueController::class, 'destroy']);
     });
 }); 

@@ -14,21 +14,27 @@ class Event extends Model
         'community_id',
         'sport_id',
         'host_id',
+        'venue_id',
         'title',
         'description',
-        'event_type',
         'event_date',
         'registration_deadline',
         'max_participants',
-        'current_participants',
-        'entry_fee',
+        'courts_used',
+        'max_courts',
+        'skill_level',
+        'event_type',
         'status',
-        'auto_queue_enabled',
-        'event_settings',
-        'location_name',
-        'location_address',
+        'entry_fee',
+        'prizes',
+        'event_rules',
+        'tags',
         'latitude',
         'longitude',
+        'location_name',
+        'full_address',
+        'auto_queue_enabled',
+        'event_settings',
         'skill_level_required',
         'cancellation_reason',
         'is_premium_only',
@@ -88,6 +94,11 @@ class Event extends Model
     public function communityRatings()
     {
         return $this->hasMany(CommunityRating::class);
+    }
+
+    public function venue()
+    {
+        return $this->belongsTo(Venue::class);
     }
 
     // Scopes
