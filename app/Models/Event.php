@@ -110,7 +110,7 @@ class Event extends Model
 
     public function scopeActive($query)
     {
-        return $query->whereIn('status', ['published', 'full', 'ongoing']);
+        return $query->whereIn('status', ['active', 'published', 'full', 'ongoing', 'open_registration']);
     }
 
     public function scopeByType($query, $type)

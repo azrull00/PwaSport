@@ -42,7 +42,10 @@ class CommunityController extends Controller
 
             // Filter by location
             if ($request->has('city')) {
-                $query->where('venue_city', 'like', '%' . $request->city . '%');
+                $query->where(function($q) use ($request) {
+                    $q->where('venue_city', 'like', '%' . $request->city . '%')
+                      ->orWhere('city', 'like', '%' . $request->city . '%');
+                });
             }
 
             // Filter by skill level
@@ -548,6 +551,258 @@ class CommunityController extends Controller
             return response()->json([
                 'status' => 'error',
                 'message' => 'Terjadi kesalahan saat mengambil icon.',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Get my communities (communities I'm a member of or host)
+     */
+    public function getMyCommunities()
+    {
+        try {
+            $user = Auth::user();
+            
+            // Get communities where user is host or member
+            $communities = Community::with(['sport', 'host.profile'])
+                ->where(function($query) use ($user) {
+                    $query->where('host_user_id', $user->id)
+                          ->orWhereHas('activeMembers', function($q) use ($user) {
+                              $q->where('user_id', $user->id);
+                          });
+                })
+                ->where('is_active', true)
+                ->orderBy('updated_at', 'desc')
+                ->get();
+
+            return response()->json([
+                'status' => 'success',
+                'data' => [
+                    'communities' => $communities
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Terjadi kesalahan saat mengambil komunitas.',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Get community messages
+     */
+    public function getMessages(Request $request, Community $community)
+    {
+        try {
+            $user = Auth::user();
+            
+            // Check if user is member or host
+            if (!$community->canUserAccess($user->id)) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Anda tidak memiliki akses ke komunitas ini.'
+                ], 403);
+            }
+
+            $messages = $community->messages()
+                ->notDeleted()
+                ->with(['user.profile'])
+                ->orderBy('created_at', 'desc')
+                ->paginate($request->get('per_page', 50));
+
+            return response()->json([
+                'status' => 'success',
+                'data' => [
+                    'messages' => $messages->items(),
+                    'pagination' => [
+                        'current_page' => $messages->currentPage(),
+                        'last_page' => $messages->lastPage(),
+                        'per_page' => $messages->perPage(),
+                        'total' => $messages->total()
+                    ]
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Terjadi kesalahan saat mengambil pesan.',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Send message to community
+     */
+    public function sendMessage(Request $request, Community $community)
+    {
+        try {
+            $user = Auth::user();
+            
+            // Check if user is member or host
+            if (!$community->canUserAccess($user->id)) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Anda tidak memiliki akses ke komunitas ini.'
+                ], 403);
+            }
+
+            $request->validate([
+                'message' => 'required|string|max:1000'
+            ]);
+
+            $message = $community->messages()->create([
+                'user_id' => $user->id,
+                'message' => $request->message,
+                'message_type' => 'text'
+            ]);
+
+            $message->load(['user.profile']);
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Pesan berhasil dikirim!',
+                'data' => [
+                    'message' => $message
+                ]
+            ], 201);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Terjadi kesalahan saat mengirim pesan.',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Get community members
+     */
+    public function getMembers(Community $community)
+    {
+        try {
+            $members = $community->members()
+                ->with(['user.profile'])
+                ->orderBy('joined_at', 'desc')
+                ->get();
+
+            return response()->json([
+                'status' => 'success',
+                'data' => [
+                    'members' => $members
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Terjadi kesalahan saat mengambil data anggota.',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Join community (FREE for development)
+     */
+    public function joinCommunity(Community $community)
+    {
+        try {
+            $user = Auth::user();
+
+            // Check if user is already a member
+            $existingMember = $community->members()->where('user_id', $user->id)->first();
+            if ($existingMember) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Anda sudah menjadi anggota komunitas ini.'
+                ], 400);
+            }
+
+            // Check if community has reached max members
+            if ($community->max_members && $community->member_count >= $community->max_members) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Komunitas telah mencapai batas maksimal anggota.'
+                ], 400);
+            }
+
+            // Create membership (FREE for development)
+            $membership = $community->members()->create([
+                'user_id' => $user->id,
+                'status' => 'active', // Auto-approve for development
+                'joined_at' => now(),
+            ]);
+
+            // Update community member count
+            $community->increment('member_count');
+
+            // Load relationships
+            $membership->load('user.profile');
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Berhasil bergabung dengan komunitas!',
+                'data' => [
+                    'membership' => $membership
+                ]
+            ], 201);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Terjadi kesalahan saat bergabung dengan komunitas.',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Leave community
+     */
+    public function leaveCommunity(Community $community)
+    {
+        try {
+            $user = Auth::user();
+
+            // Check if user is the host
+            if ($community->host_user_id == $user->id) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Host tidak dapat keluar dari komunitas. Silakan transfer kepemilikan atau hapus komunitas.'
+                ], 400);
+            }
+
+            // Find membership
+            $membership = $community->members()->where('user_id', $user->id)->first();
+            if (!$membership) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Anda bukan anggota komunitas ini.'
+                ], 400);
+            }
+
+            // Delete membership
+            $membership->delete();
+
+            // Update community member count
+            $community->decrement('member_count');
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Berhasil keluar dari komunitas.'
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Terjadi kesalahan saat keluar dari komunitas.',
                 'error' => $e->getMessage()
             ], 500);
         }

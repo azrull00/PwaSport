@@ -49,8 +49,8 @@ class AuthController extends Controller
                 'is_location_public' => false, // Default private
             ]);
 
-            // Assign default role - explicitly specify the guard to match the role
-            $user->assignRole(\Spatie\Permission\Models\Role::where('name', $request->user_type)->where('guard_name', 'api')->first());
+            // Assign default role - use web guard as default in Laravel
+            $user->assignRole(\Spatie\Permission\Models\Role::where('name', $request->user_type)->where('guard_name', 'web')->first());
 
             // Create token
             $token = $user->createToken('auth_token')->plainTextToken;

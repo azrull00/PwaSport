@@ -44,7 +44,7 @@ class EventFactory extends Factory
             'event_date' => $eventDate,
             'max_participants' => $this->faker->numberBetween(4, 20),
             'current_participants' => $this->faker->numberBetween(0, 10),
-            'entry_fee' => $this->faker->randomElement([0, 25000, 50000, 75000, 100000]),
+            'entry_fee' => 0,
             'status' => $this->faker->randomElement(['draft', 'published', 'full', 'ongoing', 'completed', 'cancelled']),
             'registration_deadline' => $this->faker->dateTimeBetween('now', $eventDate),
             'auto_queue_enabled' => $this->faker->boolean(),

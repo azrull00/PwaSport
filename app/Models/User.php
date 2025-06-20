@@ -73,7 +73,7 @@ class User extends Authenticatable
 
     public function hostedEvents()
     {
-        return $this->hasMany(Event::class, 'host_user_id');
+        return $this->hasMany(Event::class, 'host_id');
     }
 
     public function eventParticipations()
@@ -86,6 +86,11 @@ class User extends Authenticatable
         return $this->belongsToMany(Event::class, 'event_participants')
             ->withPivot('status', 'queue_position', 'registered_at', 'checked_in_at')
             ->withTimestamps();
+    }
+
+    public function events()
+    {
+        return $this->participatedEvents();
     }
 
     public function matchHistory()
@@ -158,6 +163,37 @@ class User extends Authenticatable
     public function reportsReceived()
     {
         return $this->hasMany(UserReport::class, 'reported_user_id');
+    }
+
+    // Community relationships
+    public function communityMemberships()
+    {
+        return $this->hasMany(CommunityMember::class);
+    }
+
+    public function activeCommunityMemberships()
+    {
+        return $this->hasMany(CommunityMember::class)->active();
+    }
+
+    public function joinedCommunities()
+    {
+        return $this->belongsToMany(Community::class, 'community_members')
+            ->withPivot('role', 'status', 'joined_at', 'last_activity_at')
+            ->withTimestamps();
+    }
+
+    public function activeCommunities()
+    {
+        return $this->belongsToMany(Community::class, 'community_members')
+            ->wherePivot('status', 'active')
+            ->withPivot('role', 'status', 'joined_at', 'last_activity_at')
+            ->withTimestamps();
+    }
+
+    public function communityMessages()
+    {
+        return $this->hasMany(CommunityMessage::class);
     }
 
     public function assignedReports()

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 
-const LoginPage = ({ onNavigate, userType }) => {
+const LoginPage = ({ onNavigate, userType, onLoginSuccess }) => {
     const [formData, setFormData] = useState({
         login: '',
         password: ''
@@ -65,13 +65,8 @@ const LoginPage = ({ onNavigate, userType }) => {
             const data = await response.json();
 
             if (data.status === 'success') {
-                // Store token and user data
-                localStorage.setItem('auth_token', data.data.token);
-                localStorage.setItem('user_data', JSON.stringify(data.data.user));
-                
-                alert(`Login sebagai ${getUserTypeDisplay().title} berhasil!`);
-                // Navigate to dashboard or home page
-                // onNavigate('dashboard');
+                // Call the success callback to handle authentication
+                onLoginSuccess(data.data.token, data.data.user, userType);
             } else {
                 // Handle validation errors
                 if (data.errors) {

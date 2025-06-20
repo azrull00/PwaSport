@@ -37,6 +37,7 @@ class CommunityFactory extends Factory
             'longitude' => $this->faker->longitude(95, 141),
             'max_members' => $this->faker->numberBetween(10, 100),
             'member_count' => $this->faker->numberBetween(1, 50),
+            'membership_fee' => 0, // FREE FOR DEVELOPMENT
             'total_ratings' => $this->faker->numberBetween(0, 50),
             'average_skill_rating' => $this->faker->randomFloat(2, 3.0, 5.0),
             'hospitality_rating' => $this->faker->randomFloat(2, 3.0, 5.0),

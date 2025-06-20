@@ -15,9 +15,12 @@ class Community extends Model
         'name',
         'description',
         'icon_url',
+        'has_icon',
         'community_type',
+        'skill_level_focus',
         'location_name',
         'city',
+        'venue_city',
         'district',
         'province',
         'country',
@@ -27,6 +30,8 @@ class Community extends Model
         'venue_address',
         'max_members',
         'member_count',
+        'membership_fee',
+        'regular_schedule',
         'total_ratings',
         'average_skill_rating',
         'hospitality_rating',
@@ -37,16 +42,20 @@ class Community extends Model
         'rules',
         'is_active',
         'is_public',
+        'is_premium_required',
     ];
 
     protected $casts = [
         'latitude' => 'decimal:8',
         'longitude' => 'decimal:8',
+        'membership_fee' => 'decimal:2',
         'average_skill_rating' => 'decimal:2',
         'hospitality_rating' => 'decimal:2',
         'total_ratings' => 'decimal:2',
         'is_active' => 'boolean',
         'is_public' => 'boolean',
+        'is_premium_required' => 'boolean',
+        'has_icon' => 'boolean',
         'rules' => 'array',
         'contact_info' => 'array',
     ];
@@ -72,6 +81,26 @@ class Community extends Model
         return $this->hasMany(CommunityRating::class);
     }
 
+    public function members()
+    {
+        return $this->hasMany(CommunityMember::class);
+    }
+
+    public function activeMembers()
+    {
+        return $this->hasMany(CommunityMember::class)->active();
+    }
+
+    public function messages()
+    {
+        return $this->hasMany(CommunityMessage::class);
+    }
+
+    public function recentMessages()
+    {
+        return $this->hasMany(CommunityMessage::class)->notDeleted()->recent();
+    }
+
     // Scopes
     public function scopeActive($query)
     {
@@ -89,6 +118,41 @@ class Community extends Model
     }
 
     // Helper methods
+    public function isMember($userId)
+    {
+        return $this->members()->where('user_id', $userId)->active()->exists();
+    }
+
+    public function isHost($userId)
+    {
+        return $this->host_user_id === $userId;
+    }
+
+    public function canUserAccess($userId)
+    {
+        return $this->isHost($userId) || $this->isMember($userId);
+    }
+
+    public function addMember($userId, $role = 'member', $status = 'active')
+    {
+        return $this->members()->create([
+            'user_id' => $userId,
+            'role' => $role,
+            'status' => $status,
+            'joined_at' => now()
+        ]);
+    }
+
+    public function removeMember($userId)
+    {
+        return $this->members()->where('user_id', $userId)->delete();
+    }
+
+    public function updateMemberCount()
+    {
+        $this->update(['member_count' => $this->activeMembers()->count()]);
+    }
+
     public function updateAverageRating()
     {
         $this->average_skill_rating = $this->ratings()->avg('skill_rating') ?? 0;

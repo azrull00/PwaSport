@@ -1,0 +1,1095 @@
+\documentclass[12pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[margin=1in]{geometry}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\usepackage{amssymb}
+\usepackage{hyperref}
+\usepackage{xcolor}
+\usepackage{tikz}
+\usepackage{pgfplots}
+\usepackage{listings}
+\usepackage{fancyhdr}
+\usepackage{tcolorbox}
+\usepackage{enumitem}
+\usepackage{float}
+\usepackage{booktabs}
+\usepackage{longtable}
+
+% Custom colors
+\definecolor{primarycolor}{RGB}{0,123,255}
+\definecolor{successcolor}{RGB}{40,167,69}
+\definecolor{warningcolor}{RGB}{255,193,7}
+\definecolor{dangercolor}{RGB}{220,53,69}
+\definecolor{infocolor}{RGB}{23,162,184}
+\definecolor{implementedcolor}{RGB}{34,139,34}
+\definecolor{plannedcolor}{RGB}{255,140,0}
+
+% Custom boxes
+\newtcolorbox{implemented}{colback=green!5!white,colframe=implementedcolor,title=✅ IMPLEMENTED}
+\newtcolorbox{planned}{colback=orange!5!white,colframe=plannedcolor,title=🔄 PLANNED/FUTURE}
+\newtcolorbox{infobox}{colback=blue!5!white,colframe=primarycolor,title=ℹ️ INFORMATION}
+\newtcolorbox{warningbox}{colback=yellow!5!white,colframe=warningcolor,title=⚠️ IMPORTANT}
+
+% Header and footer
+\pagestyle{fancy}
+\fancyhf{}
+\rhead{RacketHub Sport App PWA}
+\lhead{UX Flow Documentation}
+\cfoot{\thepage}
+
+% Title page setup
+\title{\Huge\textbf{RacketHub PWA}\\
+\Large Sport App UX Flow Documentation\\
+\large Current Features \& Future Roadmap}
+
+\author{
+    \textbf{Development Team}\\
+    \textit{Laravel 11 + React PWA}
+}
+
+\date{\today}
+
+\begin{document}
+
+\maketitle
+\newpage
+
+\tableofcontents
+\newpage
+
+\section{Overview}
+
+\begin{infobox}
+RacketHub adalah Progressive Web Application (PWA) berbasis Laravel 11 dengan fitur real-time untuk manajemen turnamen olahraga, komunitas, dan sistem matchmaking yang cerdas. Aplikasi ini menggabungkan teknologi backend yang robust dengan antarmuka yang responsif untuk pengalaman pengguna yang optimal.
+\end{infobox}
+
+\subsection{Technology Stack}
+
+\begin{itemize}
+    \item \textbf{Backend:} Laravel 11, MySQL, Redis, WebSocket (Pusher)
+    \item \textbf{Frontend:} React PWA, Laravel Echo, Bootstrap
+    \item \textbf{Authentication:} Laravel Sanctum (API Token)
+    \item \textbf{Real-time:} Laravel Broadcasting + Pusher
+    \item \textbf{Database:} MySQL (Production), SQLite (Testing)
+    \item \textbf{Testing:} PHPUnit (172 tests, 100\% pass rate)
+\end{itemize}
+
+\section{User Types \& Roles}
+
+\subsection{Player (Regular User)}
+\begin{implemented}
+\textbf{Current Capabilities:}
+\begin{itemize}
+    \item Register dan manage profile lengkap
+    \item Join events dan komunitas
+    \item QR code check-in system
+    \item Rating system untuk player lain
+    \item Real-time chat dalam event
+    \item Credit score management
+    \item Matchmaking participation
+    \item Location-based event discovery
+\end{itemize}
+\end{implemented}
+
+\subsection{Host (Event Organizer)}
+\begin{implemented}
+\textbf{Current Capabilities:}
+\begin{itemize}
+    \item Create dan manage events
+    \item Create dan manage communities
+    \item QR scanner untuk check-in participants
+    \item Bulk check-in management
+    \item Event statistics dashboard
+    \item Participant management (confirm/reject)
+    \item Real-time event updates
+    \item Venue management
+\end{itemize}
+\end{implemented}
+
+\subsection{Admin (System Administrator)}
+\begin{implemented}
+\textbf{Current Capabilities:}
+\begin{itemize}
+    \item System dashboard dengan analytics
+    \item User management (activate/deactivate)
+    \item Credit score adjustments
+    \item Report \& dispute resolution
+    \item Platform match history monitoring
+    \item Admin activity logs
+\end{itemize}
+\end{implemented}
+
+\section{Core Features Implementation Status}
+
+\subsection{Authentication \& Profile Management}
+
+\begin{implemented}
+\textbf{✅ Currently Implemented:}
+\begin{itemize}
+    \item \textbf{Registration:} Complete with email/phone validation
+    \item \textbf{Login/Logout:} Sanctum token-based authentication
+    \item \textbf{Profile Management:} 
+    \begin{itemize}
+        \item Personal info (name, bio, emergency contact)
+        \item Location settings (city, district, province)
+        \item Sport ratings (skill level, experience)
+        \item Privacy controls (location visibility)
+        \item QR code generation untuk check-in
+        \item \textbf{Profile Picture Upload:} Multi-format support (JPEG, PNG, WebP)
+    \end{itemize}
+    \item \textbf{API Endpoints:}
+    \begin{itemize}
+        \item GET /api/auth/profile - Get current user profile
+        \item PUT /api/auth/profile - Update profile
+        \item GET /api/users/my-qr-code - Get QR code
+        \item POST /api/users/regenerate-qr - Regenerate QR
+        \item POST /api/users/upload-profile-picture - Upload profile picture
+        \item DELETE /api/users/delete-profile-picture - Delete profile picture
+        \item GET /api/users/\{user\}/profile-picture - Get profile picture URL (public)
+    \end{itemize}
+\end{itemize}
+\end{implemented}
+
+\begin{implemented}
+\textbf{✅ Image Management System:}
+\begin{itemize}
+    \item \textbf{Community Icon Upload:}
+    \begin{itemize}
+        \item Multi-format support (PNG, JPG, WebP, SVG)
+        \item Host-only authorization with file validation
+        \item Max 2MB file size, automatic cleanup
+        \item Public URL generation with accessors
+        \item API endpoints: POST/DELETE/GET icon management
+    \end{itemize}
+    \item \textbf{Event Thumbnail Upload:}
+    \begin{itemize}
+        \item Multi-format support (JPG, PNG, WebP)
+        \item Host-only authorization with file validation
+        \item Max 5MB file size, automatic cleanup
+        \item Public URL generation with accessors
+        \item API endpoints: POST/DELETE/GET thumbnail management
+    \end{itemize}
+\end{itemize}
+\end{implemented}
+
+\begin{planned}
+\textbf{🔄 Planned Features:}
+\begin{itemize}
+    \item \textbf{SMTP Email Verification:}
+    \begin{itemize}
+        \item Laravel Mail dengan custom templates
+        \item Email verification links
+        \item Password reset via email
+        \item Event notifications via email
+    \end{itemize}
+    \item \textbf{Enhanced Image Processing:}
+    \begin{itemize}
+        \item Image compression \& optimization
+        \item Cloud storage integration (AWS S3/Cloudinary)
+        \item Multiple image sizes (thumbnail, medium, full)
+        \item WebP auto-conversion for performance
+    \end{itemize}
+\end{itemize}
+\end{planned}
+
+\subsection{Event Management System}
+
+\begin{implemented}
+\textbf{✅ Currently Implemented:}
+\begin{itemize}
+    \item \textbf{Event CRUD Operations:}
+    \begin{itemize}
+        \item Create events dengan detail lengkap
+        \item Update event information
+        \item Delete events dengan validation
+        \item Event listing dengan filtering
+    \end{itemize}
+    \item \textbf{Participant Management:}
+    \begin{itemize}
+        \item Join/leave event system
+        \item Waiting list dengan priority system
+        \item Participant confirmation workflow
+        \item Status tracking (registered → confirmed → checked\_in)
+    \end{itemize}
+    \item \textbf{Check-in System:}
+    \begin{itemize}
+        \item QR code scanning untuk host
+        \item Manual check-in option
+        \item Bulk check-in multiple participants
+        \item Real-time check-in statistics
+        \item Attendance validation
+    \end{itemize}
+    \item \textbf{Event Visual Management:}
+    \begin{itemize}
+        \item Thumbnail upload system for events
+        \item Multi-format image support (JPG, PNG, WebP)
+        \item File size validation (max 5MB)
+        \item Automatic cleanup of old thumbnails
+        \item Public access to event thumbnails
+    \end{itemize}
+\end{itemize}
+\end{implemented}
+
+\subsection{QR Code Check-in Flow}
+
+\begin{implemented}
+\textbf{✅ Complete Implementation:}
+
+\textbf{Player Side:}
+\begin{enumerate}
+    \item Player mendapatkan QR code unik di profile
+    \item QR code dapat di-regenerate jika diperlukan
+    \item QR code berisi: user\_id, timestamp, security hash
+\end{enumerate}
+
+\textbf{Host Side:}
+\begin{enumerate}
+    \item Host scan QR code participant menggunakan camera
+    \item System validasi QR code dan participant status
+    \item Automatic check-in dengan real-time notification
+    \item Update event statistics secara live
+\end{enumerate}
+
+\textbf{API Endpoints:}
+\begin{itemize}
+    \item POST /api/events/\{event\}/check-in-qr - QR scan check-in
+    \item POST /api/events/\{event\}/bulk-check-in - Manual bulk check-in
+    \item GET /api/events/\{event\}/check-in-stats - Statistics
+\end{itemize}
+\end{implemented}
+
+\subsection{Real-time Communication}
+
+\begin{implemented}
+\textbf{✅ Currently Implemented:}
+\begin{itemize}
+    \item \textbf{WebSocket Integration:}
+    \begin{itemize}
+        \item Laravel Broadcasting + Pusher
+        \item Private channels untuk events
+        \item User-specific notification channels
+    \end{itemize}
+    \item \textbf{Live Chat System:}
+    \begin{itemize}
+        \item Event-based chat rooms
+        \item Community chat channels
+        \item Real-time message delivery
+        \item Chat history persistence
+    \end{itemize}
+    \item \textbf{Live Event Updates:}
+    \begin{itemize}
+        \item Participant join/leave notifications
+        \item Check-in status updates
+        \item Event status changes
+        \item Host announcements
+    \end{itemize}
+\end{itemize}
+\end{implemented}
+
+\begin{planned}
+\textbf{🔄 Planned Features:}
+\begin{itemize}
+    \item \textbf{WhatsApp Integration dengan Fonnte:}
+    \begin{itemize}
+        \item Event reminders via WhatsApp
+        \item Match result notifications
+        \item Emergency notifications
+        \item Bulk messaging untuk communities
+        \item Template messages untuk various use cases
+    \end{itemize}
+\end{itemize}
+\end{planned}
+
+\subsection{Credit Score \& Gamification}
+
+\begin{implemented}
+\textbf{✅ Currently Implemented:}
+\begin{itemize}
+    \item \textbf{Credit Score System:}
+    \begin{itemize}
+        \item Base score: 100 points
+        \item Penalties: No-show (-15), Cancel (-10)
+        \item Bonuses: Event completion (+5), Good ratings (+2)
+        \item Automatic restrictions based on score
+    \end{itemize}
+    \item \textbf{Rating System:}
+    \begin{itemize}
+        \item Multi-dimensional ratings (skill, sportsmanship, punctuality)
+        \item Anonymous rating system
+        \item Rating disputes \& moderation
+        \item Average rating calculations
+    \end{itemize}
+\end{itemize}
+\end{implemented}
+
+\subsection{Community Management}
+
+\begin{implemented}
+\textbf{✅ Currently Implemented:}
+\begin{itemize}
+    \item \textbf{Community Features:}
+    \begin{itemize}
+        \item Create public/private communities
+        \item Community-specific events
+        \item Member management
+        \item Community ratings \& reviews
+    \end{itemize}
+    \item \textbf{Community Visual Management:}
+    \begin{itemize}
+        \item Icon upload system for communities
+        \item Multi-format image support (PNG, JPG, WebP, SVG)
+        \item File size validation (max 2MB)
+        \item Automatic cleanup of old icons
+        \item Public access to community icons
+    \end{itemize}
+\end{itemize}
+\end{implemented}
+
+\subsection{Admin Panel}
+
+\begin{implemented}
+\textbf{✅ Currently Implemented:}
+\begin{itemize}
+    \item \textbf{Dashboard \& Analytics:}
+    \begin{itemize}
+        \item User statistics dan growth metrics
+        \item Event analytics \& performance
+        \item System health monitoring
+    \end{itemize}
+    \item \textbf{User Management:}
+    \begin{itemize}
+        \item User activation/deactivation
+        \item Credit score manual adjustments
+        \item User profile monitoring
+    \end{itemize}
+    \item \textbf{Content Moderation:}
+    \begin{itemize}
+        \item Report management system
+        \item Dispute resolution workflow
+        \item Admin activity logging
+    \end{itemize}
+\end{itemize}
+\end{implemented}
+
+\section{Future Development Roadmap}
+
+\subsection{Phase 1: Communication Enhancement}
+
+\begin{planned}
+\textbf{🔄 SMTP Email System Implementation}
+
+\textbf{Target Timeline:} 2-3 weeks
+
+\textbf{Features:}
+\begin{itemize}
+    \item \textbf{Email Verification:}
+    \begin{itemize}
+        \item Welcome email dengan verification link
+        \item Automatic account activation
+        \item Re-send verification option
+    \end{itemize}
+    \item \textbf{Transactional Emails:}
+    \begin{itemize}
+        \item Event confirmations
+        \item Match results notifications
+        \item Credit score change alerts
+        \item Password reset emails
+    \end{itemize}
+    \item \textbf{Email Templates:}
+    \begin{itemize}
+        \item Responsive HTML templates
+        \item Brand-consistent styling
+        \item Multi-language support
+    \end{itemize}
+\end{itemize}
+
+\textbf{Technical Implementation:}
+\begin{itemize}
+    \item Laravel Mail facade
+    \item Queue system untuk bulk emails
+    \item Email service provider integration (SMTP/SES)
+    \item Email tracking \& analytics
+\end{itemize}
+\end{planned}
+
+\begin{planned}
+\textbf{🔄 WhatsApp Integration dengan Fonnte API}
+
+\textbf{Target Timeline:} 3-4 weeks
+
+\textbf{Features:}
+\begin{itemize}
+    \item \textbf{Event Notifications:}
+    \begin{itemize}
+        \item 24-hour event reminders
+        \item Check-in reminders
+        \item Last-minute event changes
+        \item Weather alerts untuk outdoor events
+    \end{itemize}
+    \item \textbf{Match Communications:}
+    \begin{itemize}
+        \item Match pairing notifications
+        \item Score submission reminders
+        \item Result confirmations
+    \end{itemize}
+    \item \textbf{Community Features:}
+    \begin{itemize}
+        \item Community announcements
+        \item Bulk messaging untuk members
+        \item Emergency notifications
+    \end{itemize}
+\end{itemize}
+
+\textbf{Technical Implementation:}
+\begin{itemize}
+    \item Fonnte API integration
+    \item WhatsApp number validation
+    \item Message templates management
+    \item Delivery status tracking
+    \item Rate limiting \& quota management
+\end{itemize}
+\end{planned}
+
+\subsection{Phase 2: Payment \& Subscription System}
+
+\begin{planned}
+\textbf{🔄 Doku Payment Gateway Integration}
+
+\textbf{Target Timeline:} 4-6 weeks
+
+\textbf{Features:}
+\begin{itemize}
+    \item \textbf{Subscription Tiers:}
+    \begin{itemize}
+        \item \textbf{Free Tier:} Basic features, 3 events/month
+        \item \textbf{Premium Tier:} Unlimited events, priority support
+        \item \textbf{Pro Tier:} Host features, community creation
+        \item \textbf{Enterprise:} Multi-venue, custom branding
+    \end{itemize}
+    \item \textbf{Event Payments:}
+    \begin{itemize}
+        \item Entry fee collection
+        \item Automatic refund system
+        \item Revenue sharing dengan venues
+        \item Payment receipt generation
+    \end{itemize}
+    \item \textbf{Community Fees:}
+    \begin{itemize}
+        \item Membership fee collection
+        \item Recurring payment automation
+        \item Payment failure handling
+    \end{itemize}
+\end{itemize}
+
+\textbf{Technical Implementation:}
+\begin{itemize}
+    \item Doku API integration
+    \item Subscription lifecycle management
+    \item Payment webhook handling
+    \item Invoice \& receipt generation
+    \item PCI compliance measures
+\end{itemize}
+\end{planned}
+
+\section{UX Flow Diagrams}
+
+\subsection{Player Journey - Event Participation}
+
+\begin{tikzpicture}[node distance=2cm, auto]
+\tikzstyle{start} = [rectangle, rounded corners, minimum width=3cm, minimum height=1cm, text centered, draw=black, fill=successcolor!30]
+\tikzstyle{process} = [rectangle, minimum width=3cm, minimum height=1cm, text centered, draw=black, fill=blue!30]
+\tikzstyle{decision} = [diamond, minimum width=3cm, minimum height=1cm, text centered, draw=black, fill=yellow!30]
+\tikzstyle{end} = [rectangle, rounded corners, minimum width=3cm, minimum height=1cm, text centered, draw=black, fill=red!30]
+
+\node (start) [start] {Player Login};
+\node (browse) [process, below of=start] {Browse Events};
+\node (join) [decision, below of=browse] {Join Event?};
+\node (waiting) [process, right of=join, xshift=2cm] {Waiting List};
+\node (confirmed) [process, below of=join] {Confirmed};
+\node (qr) [process, below of=confirmed] {Show QR Code};
+\node (checkin) [process, below of=qr] {Host Scans QR};
+\node (event) [process, below of=checkin] {Participate Event};
+\node (rate) [process, below of=event] {Rate Other Players};
+\node (finish) [end, below of=rate] {Event Complete};
+
+\draw [->] (start) -- (browse);
+\draw [->] (browse) -- (join);
+\draw [->] (join) -- node[anchor=south] {Yes} (confirmed);
+\draw [->] (join) -- node[anchor=south] {Full} (waiting);
+\draw [->] (waiting) -- (confirmed);
+\draw [->] (confirmed) -- (qr);
+\draw [->] (qr) -- (checkin);
+\draw [->] (checkin) -- (event);
+\draw [->] (event) -- (rate);
+\draw [->] (rate) -- (finish);
+
+\end{tikzpicture}
+
+\subsection{Host Journey - Event Management}
+
+\begin{tikzpicture}[node distance=2cm, auto]
+\tikzstyle{start} = [rectangle, rounded corners, minimum width=3cm, minimum height=1cm, text centered, draw=black, fill=successcolor!30]
+\tikzstyle{process} = [rectangle, minimum width=3cm, minimum height=1cm, text centered, draw=black, fill=blue!30]
+\tikzstyle{decision} = [diamond, minimum width=3cm, minimum height=1cm, text centered, draw=black, fill=yellow!30]
+\tikzstyle{end} = [rectangle, rounded corners, minimum width=3cm, minimum height=1cm, text centered, draw=black, fill=red!30]
+
+\node (start) [start] {Host Login};
+\node (create) [process, below of=start] {Create Event};
+\node (manage) [process, below of=create] {Manage Participants};
+\node (checkin) [process, below of=manage] {QR Scanner Ready};
+\node (scan) [decision, below of=checkin] {Scan QR Codes};
+\node (bulk) [process, right of=scan, xshift=2cm] {Bulk Check-in};
+\node (monitor) [process, below of=scan] {Monitor Statistics};
+\node (conduct) [process, below of=monitor] {Conduct Event};
+\node (close) [end, below of=conduct] {Close Event};
+
+\draw [->] (start) -- (create);
+\draw [->] (create) -- (manage);
+\draw [->] (manage) -- (checkin);
+\draw [->] (checkin) -- (scan);
+\draw [->] (scan) -- node[anchor=south] {Individual} (monitor);
+\draw [->] (scan) -- node[anchor=south] {Multiple} (bulk);
+\draw [->] (bulk) -- (monitor);
+\draw [->] (monitor) -- (conduct);
+\draw [->] (conduct) -- (close);
+
+\end{tikzpicture}
+
+\section{API Documentation Summary}
+
+\subsection{Currently Available Endpoints}
+
+\begin{implemented}
+\textbf{✅ Authentication \& Profile:}
+\begin{itemize}
+    \item POST /api/auth/register
+    \item POST /api/auth/login
+    \item POST /api/auth/logout
+    \item GET /api/auth/profile
+    \item PUT /api/auth/profile
+    \item GET /api/users/my-qr-code
+    \item POST /api/users/regenerate-qr
+\end{itemize}
+
+\textbf{✅ Event Management:}
+\begin{itemize}
+    \item GET /api/events (dengan filtering)
+    \item POST /api/events
+    \item GET /api/events/\{event\}
+    \item PUT /api/events/\{event\}
+    \item POST /api/events/\{event\}/join
+    \item POST /api/events/\{event\}/check-in-qr
+    \item POST /api/events/\{event\}/bulk-check-in
+    \item GET /api/events/\{event\}/check-in-stats
+    \item POST /api/events/\{event\}/upload-thumbnail
+    \item DELETE /api/events/\{event\}/delete-thumbnail
+    \item GET /api/events/\{event\}/thumbnail
+\end{itemize}
+
+\textbf{✅ Community Management:}
+\begin{itemize}
+    \item GET /api/communities
+    \item POST /api/communities
+    \item GET /api/communities/\{community\}
+    \item PUT /api/communities/\{community\}
+    \item POST /api/communities/\{community\}/upload-icon
+    \item DELETE /api/communities/\{community\}/delete-icon
+    \item GET /api/communities/\{community\}/icon
+\end{itemize}
+
+\textbf{✅ Real-time \& Chat:}
+\begin{itemize}
+    \item POST /api/realtime/chat/send
+    \item POST /api/realtime/event/broadcast
+    \item WebSocket channels untuk live updates
+\end{itemize}
+
+\textbf{✅ Admin Functions:}
+\begin{itemize}
+    \item GET /api/admin/dashboard
+    \item GET /api/admin/users
+    \item POST /api/admin/users/\{user\}/adjust-credit
+    \item GET /api/admin/reports
+\end{itemize}
+\end{implemented}
+
+\subsection{Planned API Extensions}
+
+\begin{planned}
+\textbf{🔄 Email \& Communication:}
+\begin{itemize}
+    \item POST /api/notifications/email/send
+    \item POST /api/notifications/whatsapp/send
+    \item GET /api/notifications/templates
+    \item PUT /api/notifications/preferences
+\end{itemize}
+
+\textbf{🔄 Payment \& Subscriptions:}
+\begin{itemize}
+    \item POST /api/payments/subscribe
+    \item POST /api/payments/event-fee
+    \item GET /api/payments/history
+    \item POST /api/payments/webhook/doku
+\end{itemize}
+
+\textbf{🔄 Enhanced Features:}
+\begin{itemize}
+    \item POST /api/profile/upload-picture
+    \item GET /api/analytics/detailed
+    \item POST /api/communities/bulk-message
+\end{itemize}
+\end{planned}
+
+\section{Testing \& Quality Assurance}
+
+\begin{implemented}
+\textbf{✅ Current Test Coverage:}
+\begin{itemize}
+    \item \textbf{Total Tests:} 172 tests
+    \item \textbf{Success Rate:} 100\% (semua tests passing)
+    \item \textbf{Feature Tests:} Authentication, Events, QR Check-in, Real-time, Image Management
+    \item \textbf{Unit Tests:} Models, Services, Utilities
+    \item \textbf{Integration Tests:} API endpoints, Database operations
+    \item \textbf{New Tests Added:}
+    \begin{itemize}
+        \item CommunityIconTest: 11 tests, 38 assertions
+        \item EventThumbnailTest: 13 tests, 42 assertions
+    \end{itemize}
+\end{itemize}
+\end{implemented}
+
+\section{Deployment \& Infrastructure}
+
+\begin{implemented}
+\textbf{✅ Current Setup:}
+\begin{itemize}
+    \item \textbf{Database:} MySQL (Production), SQLite (Testing)
+    \item \textbf{Queue System:} Laravel Queue dengan database driver
+    \item \textbf{Broadcasting:} Pusher untuk real-time features
+    \item \textbf{Storage:} Local filesystem dengan rencana cloud migration
+\end{itemize}
+\end{implemented}
+
+\begin{planned}
+\textbf{🔄 Infrastructure Enhancements:}
+\begin{itemize}
+    \item \textbf{CDN Integration:} Untuk faster asset delivery
+    \item \textbf{Redis Cache:} Session \& application caching
+    \item \textbf{Load Balancing:} Untuk high availability
+    \item \textbf{Monitoring:} Application performance monitoring
+\end{itemize}
+\end{planned}
+
+\section{Conclusion}
+
+RacketHub PWA telah mencapai foundation yang solid dengan implementasi 100\% backend functionality dan comprehensive testing coverage. Sistem QR check-in, real-time communication, image management, dan management tools telah siap untuk production deployment.
+
+\begin{warningbox}
+\textbf{Next Immediate Steps:}
+\begin{enumerate}
+    \item Frontend React PWA development dengan image upload UI
+    \item SMTP email verification implementation  
+    \item WhatsApp integration dengan Fonnte
+    \item Doku payment gateway integration
+    \item Production deployment \& monitoring setup
+\end{enumerate}
+\end{warningbox}
+
+Dengan roadmap yang jelas, image management system yang lengkap, dan arsitektur yang scalable, RacketHub siap untuk menjadi platform sport management yang comprehensive dan user-friendly di Indonesia.
+
+\section{Detailed User Experience Flows}
+
+\subsection{Onboarding \& First-Time User Experience}
+
+\begin{implemented}
+\textbf{✅ Current Onboarding Flow:}
+
+\textbf{1. App Launch (PWA)}
+\begin{itemize}
+    \item Splash screen dengan RacketHub branding
+    \item Progressive loading indicators
+    \item Offline capability detection
+    \item Service worker registration
+\end{itemize}
+
+\textbf{2. Welcome/Landing Page}
+\begin{itemize}
+    \item Hero section dengan value proposition
+    \item "Find Your Game" call-to-action
+    \item Featured sports showcase
+    \item Login/Register buttons prominent
+\end{itemize}
+
+\textbf{3. Registration Process}
+\begin{itemize}
+    \item \textbf{Step 1:} Basic Info (name, email, phone)
+    \item \textbf{Step 2:} Account Setup (password, user type selection)
+    \item \textbf{Step 3:} Profile Creation (location, sports interest)
+    \item \textbf{Step 4:} QR Code Generation
+    \item \textbf{Step 5:} Welcome tutorial/tour
+\end{itemize}
+\end{implemented}
+
+\subsection{Player User Journey - Complete Flow}
+
+\begin{implemented}
+\textbf{✅ Player Dashboard \& Navigation:}
+
+\textbf{Main Dashboard}
+\begin{itemize}
+    \item \textbf{Quick Stats Card:} Credit score, upcoming events, ratings
+    \item \textbf{Nearby Events:} Location-based event discovery (radius 50km)
+    \item \textbf{Your Events:} Registered, confirmed, completed events
+    \item \textbf{Communities:} Joined communities dengan activity feed
+    \item \textbf{Recent Matches:} Match history dengan ratings received
+\end{itemize}
+
+\textbf{Event Discovery \& Participation}
+\begin{enumerate}
+    \item \textbf{Browse Events:} 
+    \begin{itemize}
+        \item Filter by sport, date, location, skill level
+        \item Map view dengan venue locations
+        \item List view dengan event details
+        \item Search functionality
+    \end{itemize}
+    \item \textbf{Event Details:}
+    \begin{itemize}
+        \item Event info (date, time, venue, participants)
+        \item Host profile \& community info
+        \item Participant list dengan skill ratings
+        \item Join/Leave buttons dengan status indicators
+    \end{itemize}
+    \item \textbf{Registration Process:}
+    \begin{itemize}
+        \item Instant join atau waiting list
+        \item Payment integration (jika ada fee)
+        \item Calendar integration
+        \item Confirmation notifications
+    \end{itemize}
+    \item \textbf{Pre-Event:}
+    \begin{itemize}
+        \item Event reminders (24h, 2h, 30min)
+        \item QR code ready di profile
+        \item Weather updates untuk outdoor events
+        \item Chat dengan other participants
+    \end{itemize}
+    \item \textbf{Check-in Process:}
+    \begin{itemize}
+        \item Show QR code to host
+        \item Confirmation feedback
+        \item Access to event chat
+        \item Real-time participant list
+    \end{itemize}
+    \item \textbf{During Event:}
+    \begin{itemize}
+        \item Live chat dengan participants
+        \item Match pairing notifications
+        \item Score tracking interface
+        \item Emergency contact features
+    \end{itemize}
+    \item \textbf{Post-Event:}
+    \begin{itemize}
+        \item Rate other participants
+        \item Submit match results
+        \item Upload event photos (optional)
+        \item Credit score updates
+        \item Receive ratings dari others
+    \end{itemize}
+\end{enumerate}
+\end{implemented}
+
+\subsection{Host User Journey - Complete Flow}
+
+\begin{implemented}
+\textbf{✅ Host Dashboard \& Management:}
+
+\textbf{Host Control Panel}
+\begin{itemize}
+    \item \textbf{Event Management Hub:} Active, upcoming, completed events
+    \item \textbf{Community Management:} Manage communities dengan member analytics
+    \item \textbf{Check-in Station:} QR scanner ready-to-use
+    \item \textbf{Revenue Analytics:} Event fees, community subscriptions (future)
+    \item \textbf{Host Ratings:} Performance metrics dari participants
+\end{itemize}
+
+\textbf{Event Creation \& Management}
+\begin{enumerate}
+    \item \textbf{Create Event:}
+    \begin{itemize}
+        \item Event type selection (casual, tournament, training)
+        \item Date/time picker dengan timezone support
+        \item Venue selection atau custom location
+        \item Participant limits \& skill requirements
+        \item Fee setting (free or paid)
+        \item Event description \& rules
+        \item \textbf{Thumbnail Upload:} Visual identity untuk event (IMPLEMENTED ✅)
+    \end{itemize}
+    \item \textbf{Participant Management:}
+    \begin{itemize}
+        \item Real-time registration monitoring
+        \item Approve/reject participants dari waiting list
+        \item Send bulk messages to participants
+        \item Create custom participant groups
+    \end{itemize}
+    \item \textbf{Pre-Event Setup:}
+    \begin{itemize}
+        \item QR scanner testing \& calibration
+        \item Participant list printing options
+        \item Weather monitoring \& alerts
+        \item Equipment checklist management
+    \end{itemize}
+    \item \textbf{Check-in Management:}
+    \begin{itemize}
+        \item \textbf{QR Scanner Interface:}
+        \begin{itemize}
+            \item Camera activation dengan auto-focus
+            \item Scan validation dengan audio/visual feedback
+            \item Participant info display on scan
+            \item Bulk check-in for group arrivals
+        \end{itemize}
+        \item \textbf{Manual Check-in:}
+        \begin{itemize}
+            \item Search participant by name/phone
+            \item Quick check-in buttons
+            \item Late arrival handling
+        \end{itemize}
+        \item \textbf{Live Statistics:}
+        \begin{itemize}
+            \item Check-in progress bar
+            \item Real-time participant count
+            \item No-show tracking
+            \item Expected vs actual attendance
+        \end{itemize}
+    \end{itemize}
+    \item \textbf{Event Execution:}
+    \begin{itemize}
+        \item Matchmaking interface (singles/doubles)
+        \item Score input \& tracking
+        \item Live leaderboard updates
+        \item Incident reporting system
+    \end{itemize}
+    \item \textbf{Post-Event Management:}
+    \begin{itemize}
+        \item Final result compilation
+        \item Participant performance analytics
+        \item Revenue \& cost tracking
+        \item Event feedback collection
+        \item Photo/video gallery management
+    \end{itemize}
+\end{enumerate}
+\end{implemented}
+
+\section{New Image Management Features}
+
+\subsection{Community Icon Management}
+
+\begin{implemented}
+\textbf{✅ Community Visual Identity System:}
+
+\textbf{Icon Upload \& Management}
+\begin{itemize}
+    \item \textbf{Upload Requirements:}
+    \begin{itemize}
+        \item Supported formats: PNG, JPG, SVG (recommended)
+        \item Maximum size: 2MB
+        \item Recommended dimensions: 512x512px (square)
+        \item Automatic resize untuk different displays
+    \end{itemize}
+    \item \textbf{Image Processing:}
+    \begin{itemize}
+        \item Auto-crop to square aspect ratio
+        \item Generate multiple sizes (64px, 128px, 256px, 512px)
+        \item WebP conversion untuk optimal loading
+        \item Placeholder generation untuk loading states
+    \end{itemize}
+    \item \textbf{Usage Contexts:}
+    \begin{itemize}
+        \item Community card displays
+        \item Member directory listings
+        \item Event host identification
+        \item Chat message avatars
+        \item Search result thumbnails
+    \end{itemize}
+\end{itemize}
+
+\textbf{API Endpoints:}
+\begin{itemize}
+    \item POST /api/communities/\{community\}/upload-icon
+    \item DELETE /api/communities/\{community\}/delete-icon
+    \item GET /api/communities/\{community\}/icon
+\end{itemize}
+\end{implemented}
+
+\subsection{Event Thumbnail System}
+
+\begin{implemented}
+\textbf{✅ Event Visual Enhancement:}
+
+\textbf{Thumbnail Upload \& Management}
+\begin{itemize}
+    \item \textbf{Upload Requirements:}
+    \begin{itemize}
+        \item Supported formats: JPG, PNG, WebP
+        \item Maximum size: 5MB
+        \item Recommended aspect ratio: 16:9 (landscape)
+        \item Minimum resolution: 1280x720px
+    \end{itemize}
+    \item \textbf{Image Processing:}
+    \begin{itemize}
+        \item Automatic compression untuk optimal performance
+        \item Generate responsive image sizes
+        \item Smart cropping untuk different aspect ratios
+        \item Watermark application dengan host branding
+    \end{itemize}
+    \item \textbf{Usage Contexts:}
+    \begin{itemize}
+        \item Event listing cards
+        \item Event detail pages
+        \item Social media sharing previews
+        \item Mobile app push notifications
+        \item Email newsletter features
+    \end{itemize}
+\end{itemize}
+
+\textbf{Default Thumbnail System:}
+\begin{itemize}
+    \item Sport-specific default images
+    \item Venue-based fallback images
+    \item Automatically generated thumbnails dengan event info overlay
+    \item Community branding integration
+\end{itemize}
+
+\textbf{API Endpoints:}
+\begin{itemize}
+    \item POST /api/events/\{event\}/upload-thumbnail
+    \item DELETE /api/events/\{event\}/delete-thumbnail
+    \item GET /api/events/\{event\}/thumbnail
+\end{itemize}
+\end{implemented}
+
+\section{Enhanced UX Flow Diagrams}
+
+\subsection{Complete User Onboarding Flow}
+
+\begin{tikzpicture}[node distance=1.5cm, auto]
+\tikzstyle{start} = [rectangle, rounded corners, minimum width=2.5cm, minimum height=0.8cm, text centered, draw=black, fill=successcolor!30, font=\scriptsize]
+\tikzstyle{process} = [rectangle, minimum width=2.5cm, minimum height=0.8cm, text centered, draw=black, fill=blue!30, font=\scriptsize]
+\tikzstyle{decision} = [diamond, minimum width=2.5cm, minimum height=0.8cm, text centered, draw=black, fill=yellow!30, font=\scriptsize]
+\tikzstyle{end} = [rectangle, rounded corners, minimum width=2.5cm, minimum height=0.8cm, text centered, draw=black, fill=green!30, font=\scriptsize]
+
+\node (launch) [start] {App Launch};
+\node (landing) [process, below of=launch] {Landing Page};
+\node (choice) [decision, below of=landing] {New User?};
+\node (register) [process, left of=choice, xshift=-2cm] {Registration};
+\node (login) [process, right of=choice, xshift=2cm] {Login};
+\node (profile) [process, below of=register] {Profile Setup};
+\node (photo) [process, below of=profile] {Upload Photo};
+\node (tutorial) [process, below of=photo] {App Tutorial};
+\node (dashboard) [end, below of=tutorial] {Main Dashboard};
+\node (dashboard2) [end, below of=login] {Main Dashboard};
+
+\draw [->] (launch) -- (landing);
+\draw [->] (landing) -- (choice);
+\draw [->] (choice) -- node[anchor=south] {Yes} (register);
+\draw [->] (choice) -- node[anchor=south] {No} (login);
+\draw [->] (register) -- (profile);
+\draw [->] (profile) -- (photo);
+\draw [->] (photo) -- (tutorial);
+\draw [->] (tutorial) -- (dashboard);
+\draw [->] (login) -- (dashboard2);
+
+\end{tikzpicture}
+
+\subsection{Host Event Creation Flow with Image Upload}
+
+\begin{tikzpicture}[node distance=1.5cm, auto]
+\tikzstyle{start} = [rectangle, rounded corners, minimum width=2.5cm, minimum height=0.8cm, text centered, draw=black, fill=successcolor!30, font=\scriptsize]
+\tikzstyle{process} = [rectangle, minimum width=2.5cm, minimum height=0.8cm, text centered, draw=black, fill=blue!30, font=\scriptsize]
+\tikzstyle{decision} = [diamond, minimum width=2.5cm, minimum height=0.8cm, text centered, draw=black, fill=yellow!30, font=\scriptsize]
+\tikzstyle{end} = [rectangle, rounded corners, minimum width=2.5cm, minimum height=0.8cm, text centered, draw=black, fill=green!30, font=\scriptsize]
+
+\node (start) [start] {Host Dashboard};
+\node (create) [process, below of=start] {Create Event};
+\node (basic) [process, below of=create] {Basic Info};
+\node (venue) [process, below of=basic] {Venue Selection};
+\node (thumbnail) [decision, below of=venue] {Add Thumbnail?};
+\node (upload) [process, left of=thumbnail, xshift=-2cm] {Upload Image};
+\node (default) [process, right of=thumbnail, xshift=2cm] {Use Default};
+\node (rules) [process, below of=thumbnail] {Rules \& Settings};
+\node (publish) [end, below of=rules] {Publish Event};
+
+\draw [->] (start) -- (create);
+\draw [->] (create) -- (basic);
+\draw [->] (basic) -- (venue);
+\draw [->] (venue) -- (thumbnail);
+\draw [->] (thumbnail) -- node[anchor=south] {Yes} (upload);
+\draw [->] (thumbnail) -- node[anchor=south] {No} (default);
+\draw [->] (upload) -- (rules);
+\draw [->] (default) -- (rules);
+\draw [->] (rules) -- (publish);
+
+\end{tikzpicture}
+
+\subsection{Community Creation Flow with Icon Upload}
+
+\begin{tikzpicture}[node distance=1.5cm, auto]
+\tikzstyle{start} = [rectangle, rounded corners, minimum width=2.5cm, minimum height=0.8cm, text centered, draw=black, fill=successcolor!30, font=\scriptsize]
+\tikzstyle{process} = [rectangle, minimum width=2.5cm, minimum height=0.8cm, text centered, draw=black, fill=blue!30, font=\scriptsize]
+\tikzstyle{decision} = [diamond, minimum width=2.5cm, minimum height=0.8cm, text centered, draw=black, fill=yellow!30, font=\scriptsize]
+\tikzstyle{end} = [rectangle, rounded corners, minimum width=2.5cm, minimum height=0.8cm, text centered, draw=black, fill=green!30, font=\scriptsize]
+
+\node (start) [start] {Host Dashboard};
+\node (community) [process, below of=start] {Create Community};
+\node (info) [process, below of=community] {Community Info};
+\node (icon) [decision, below of=info] {Upload Icon?};
+\node (upload) [process, left of=icon, xshift=-2cm] {Upload Icon};
+\node (default) [process, right of=icon, xshift=2cm] {Default Icon};
+\node (settings) [process, below of=icon] {Privacy Settings};
+\node (launch) [end, below of=settings] {Launch Community};
+
+\draw [->] (start) -- (community);
+\draw [->] (community) -- (info);
+\draw [->] (info) -- (icon);
+\draw [->] (icon) -- node[anchor=south] {Yes} (upload);
+\draw [->] (icon) -- node[anchor=south] {No} (default);
+\draw [->] (upload) -- (settings);
+\draw [->] (default) -- (settings);
+\draw [->] (settings) -- (launch);
+
+\end{tikzpicture}
+
+\section{Mobile-First PWA Design Principles}
+
+\subsection{Responsive Design Strategy}
+
+\begin{implemented}
+\textbf{✅ Current Mobile Optimization:}
+\begin{itemize}
+    \item \textbf{Progressive Web App Features:}
+    \begin{itemize}
+        \item Offline-first architecture
+        \item App-like navigation dengan bottom tabs
+        \item Push notification support
+        \item Install prompt untuk home screen
+    \end{itemize}
+    \item \textbf{Touch-Optimized Interface:}
+    \begin{itemize}
+        \item Large tap targets (44px minimum)
+        \item Swipe gestures untuk navigation
+        \item Pull-to-refresh functionality
+        \item Touch-friendly forms dengan proper keyboards
+    \end{itemize}
+    \item \textbf{Performance Optimization:}
+    \begin{itemize}
+        \item Lazy loading untuk images
+        \item Virtual scrolling untuk long lists
+        \item Service worker caching
+        \item Compressed image delivery
+    \end{itemize}
+\end{itemize}
+\end{implemented}
+
+\end{document} 

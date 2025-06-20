@@ -347,15 +347,34 @@ class UserController extends Controller
     public function getSportRatings(User $user)
     {
         try {
-            $sportRatings = UserSportRating::with('sport')
-                ->where('user_id', $user->id)
-                ->orderBy('skill_rating', 'desc')
+            $sportRatings = $user->sportRatings()
+                ->with('sport')
+                ->orderBy('mmr', 'desc')
                 ->get();
+
+            // Transform data to match frontend expectations
+            $transformedRatings = $sportRatings->map(function ($rating) {
+                return [
+                    'id' => $rating->id,
+                    'sport' => [
+                        'id' => $rating->sport->id,
+                        'name' => $rating->sport->name,
+                        'code' => $rating->sport->code
+                    ],
+                    'skill_rating' => $rating->mmr / 100, // Convert MMR to 0-10 scale for display
+                    'skill_level' => $this->getSkillLevelFromMMR($rating->mmr),
+                    'matches_played' => $rating->matches_played,
+                    'wins' => $rating->wins,
+                    'losses' => $rating->losses,
+                    'win_rate' => $rating->win_rate,
+                    'last_match_at' => $rating->last_match_at
+                ];
+            });
 
             return response()->json([
                 'status' => 'success',
                 'data' => [
-                    'sport_ratings' => $sportRatings
+                    'sport_ratings' => $transformedRatings
                 ]
             ]);
 
@@ -369,53 +388,15 @@ class UserController extends Controller
     }
 
     /**
-     * Update user sport rating (self only)
+     * Helper method to convert MMR to skill level
      */
-    public function updateSportRating(Request $request, User $user, Sport $sport)
+    private function getSkillLevelFromMMR($mmr)
     {
-        try {
-            $currentUser = Auth::user();
-
-            // Only allow self-update
-            if ($currentUser->id !== $user->id) {
-                return response()->json([
-                    'status' => 'error',
-                    'message' => 'Anda hanya dapat mengubah rating olahraga sendiri.'
-                ], 403);
-            }
-
-            $request->validate([
-                'skill_level' => 'required|in:pemula,menengah,mahir,ahli,profesional',
-                'skill_rating' => 'required|numeric|min:0|max:10',
-                'experience_years' => 'nullable|integer|min:0|max:50',
-                'achievements' => 'nullable|string|max:1000',
-            ]);
-
-            $sportRating = UserSportRating::updateOrCreate(
-                [
-                    'user_id' => $user->id,
-                    'sport_id' => $sport->id
-                ],
-                $request->only(['skill_level', 'skill_rating', 'experience_years', 'achievements'])
-            );
-
-            $sportRating->load('sport');
-
-            return response()->json([
-                'status' => 'success',
-                'message' => 'Rating olahraga berhasil diperbarui!',
-                'data' => [
-                    'sport_rating' => $sportRating
-                ]
-            ]);
-
-        } catch (\Exception $e) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Terjadi kesalahan saat memperbarui rating olahraga.',
-                'error' => $e->getMessage()
-            ], 500);
-        }
+        if ($mmr >= 1800) return 'profesional';
+        if ($mmr >= 1500) return 'ahli';
+        if ($mmr >= 1200) return 'mahir';
+        if ($mmr >= 900) return 'menengah';
+        return 'pemula';
     }
 
     /**
@@ -424,12 +405,11 @@ class UserController extends Controller
     public function getBlockedUsers()
     {
         try {
-            $currentUser = Auth::user();
-
-            $blockedUsers = UserBlock::with(['blockedUser.profile'])
-                ->where('blocking_user_id', $currentUser->id)
-                ->orderBy('created_at', 'desc')
-                ->paginate(15);
+            $user = Auth::user();
+            
+            $blockedUsers = UserBlock::with('blockedUser.profile')
+                ->where('blocking_user_id', $user->id)
+                ->paginate(20);
 
             return response()->json([
                 'status' => 'success',
@@ -441,7 +421,7 @@ class UserController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'status' => 'error',
-                'message' => 'Terjadi kesalahan saat mengambil daftar user yang diblokir.',
+                'message' => 'Terjadi kesalahan saat mengambil daftar pengguna yang diblokir.',
                 'error' => $e->getMessage()
             ], 500);
         }
@@ -495,40 +475,88 @@ class UserController extends Controller
     }
 
     /**
-     * Get user's QR code for event check-in
+     * Get user's events (for MyEventsPage)
      */
-    public function getQRCode(Request $request)
+    public function getMyEvents(Request $request)
     {
         try {
             $user = Auth::user();
-            $profile = $user->profile;
+            $query = $user->participatedEvents()
+                ->with(['sport', 'host.profile', 'participants'])
+                ->withPivot('status');
 
-            if (!$profile || !$profile->qr_code) {
-                return response()->json([
-                    'status' => 'error',
-                    'message' => 'QR code belum tersedia. Silakan lengkapi profil Anda.'
-                ], 404);
+            // Filter by status (upcoming/past)
+            if ($request->has('status')) {
+                if ($request->status === 'upcoming') {
+                    $query->where('event_date', '>=', now()->toDateString());
+                } elseif ($request->status === 'past') {
+                    $query->where('event_date', '<', now()->toDateString());
+                }
             }
 
-            // Generate QR code data with additional security
+            // Filter by participation status
+            if ($request->has('participation_status')) {
+                $query->wherePivot('status', $request->participation_status);
+            }
+
+            $events = $query->orderBy('event_date', 'asc')
+                ->paginate($request->get('per_page', 50));
+
+            // Add participant status to each event
+            foreach ($events as $event) {
+                $participant = $event->participants->where('user_id', $user->id)->first();
+                $event->participant_status = $participant ? $participant->status : 'unknown';
+                
+                // Add status display
+                if ($event->event_date === now()->toDateString()) {
+                    $event->status_display = 'Hari Ini';
+                } elseif ($event->event_date > now()->toDateString()) {
+                    $daysUntil = now()->diffInDays($event->event_date);
+                    $event->status_display = $daysUntil . ' hari lagi';
+                } else {
+                    $event->status_display = 'Selesai';
+                }
+            }
+
+            return response()->json([
+                'status' => 'success',
+                'data' => [
+                    'events' => $events
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Terjadi kesalahan saat mengambil event Anda.',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Get user QR code for event check-in
+     */
+    public function getMyQRCode(Request $request)
+    {
+        try {
+            $user = Auth::user();
+            
+            // Generate QR code data
             $qrData = [
-                'qr_code' => $profile->qr_code,
                 'user_id' => $user->id,
-                'user_name' => $profile->full_name,
-                'generated_at' => now()->toISOString(),
-                'expires_at' => now()->addHours(24)->toISOString(), // QR expires in 24 hours
+                'timestamp' => now()->timestamp,
+                'hash' => hash('sha256', $user->id . $user->email . now()->timestamp)
             ];
 
             return response()->json([
                 'status' => 'success',
-                'message' => 'QR code berhasil diambil.',
                 'data' => [
-                    'qr_data' => $qrData,
-                    'qr_string' => $profile->qr_code, // For simple QR scanners
-                    'user_info' => [
-                        'name' => $profile->full_name,
-                        'photo' => $profile->profile_picture,
-                        'credit_score' => $user->credit_score,
+                    'qr_data' => base64_encode(json_encode($qrData)),
+                    'user' => [
+                        'id' => $user->id,
+                        'name' => $user->name,
+                        'email' => $user->email
                     ]
                 ]
             ]);
@@ -536,46 +564,7 @@ class UserController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'status' => 'error',
-                'message' => 'Terjadi kesalahan saat mengambil QR code.',
-                'error' => $e->getMessage()
-            ], 500);
-        }
-    }
-
-    /**
-     * Regenerate user's QR code
-     */
-    public function regenerateQRCode(Request $request)
-    {
-        try {
-            $user = Auth::user();
-            $profile = $user->profile;
-
-            if (!$profile) {
-                return response()->json([
-                    'status' => 'error',
-                    'message' => 'Profil tidak ditemukan.'
-                ], 404);
-            }
-
-            // Generate new QR code
-            $newQRCode = 'rackethub_' . $user->id . '_' . \Illuminate\Support\Str::random(8);
-            
-            $profile->update(['qr_code' => $newQRCode]);
-
-            return response()->json([
-                'status' => 'success',
-                'message' => 'QR code berhasil di-generate ulang.',
-                'data' => [
-                    'qr_code' => $newQRCode,
-                    'generated_at' => now()->toISOString(),
-                ]
-            ]);
-
-        } catch (\Exception $e) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Terjadi kesalahan saat generate ulang QR code.',
+                'message' => 'Terjadi kesalahan saat membuat QR code.',
                 'error' => $e->getMessage()
             ], 500);
         }

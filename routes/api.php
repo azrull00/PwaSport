@@ -49,13 +49,14 @@ Route::middleware('auth:sanctum')->group(function () {
     // User routes
     Route::prefix('users')->group(function () {
         Route::get('/', [UserController::class, 'index']);
-        Route::get('/blocked', [UserController::class, 'getBlockedUsers']);
         
-        // QR Code management (must be before {user} routes)
-        Route::get('/my-qr-code', [UserController::class, 'getQRCode']);
-        Route::post('/regenerate-qr', [UserController::class, 'regenerateQRCode']);
+        // My events and QR code routes (must be before /{user} routes)
+        Route::get('/my-events', [UserController::class, 'getMyEvents']);
+        Route::get('/my-qr-code', [UserController::class, 'getMyQRCode']);
         
-        // Profile Picture management (must be before {user} routes)
+        // Profile management
+        Route::get('/profile', [UserController::class, 'getProfile']);
+        Route::put('/profile', [UserController::class, 'updateProfile']);
         Route::post('/upload-profile-picture', [UserController::class, 'uploadProfilePicture']);
         Route::delete('/delete-profile-picture', [UserController::class, 'deleteProfilePicture']);
         
@@ -106,6 +107,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // Communities routes
     Route::prefix('communities')->group(function () {
         Route::get('/', [CommunityController::class, 'index']);
+        Route::get('/my-communities', [CommunityController::class, 'getMyCommunities']);
         Route::post('/', [CommunityController::class, 'store']);
         Route::get('/{community}', [CommunityController::class, 'show']);
         Route::put('/{community}', [CommunityController::class, 'update']);
@@ -117,6 +119,15 @@ Route::middleware('auth:sanctum')->group(function () {
         
         // Community events
         Route::get('/{community}/events', [CommunityController::class, 'getEvents']);
+        
+        // Community membership
+        Route::get('/{community}/members', [CommunityController::class, 'getMembers']);
+        Route::post('/{community}/join', [CommunityController::class, 'joinCommunity']);
+        Route::delete('/{community}/leave', [CommunityController::class, 'leaveCommunity']);
+        
+        // Community messages/chat
+        Route::get('/{community}/messages', [CommunityController::class, 'getMessages']);
+        Route::post('/{community}/messages', [CommunityController::class, 'sendMessage']);
         
         // Community icon management (host only)
         Route::post('/{community}/upload-icon', [CommunityController::class, 'uploadIcon']);

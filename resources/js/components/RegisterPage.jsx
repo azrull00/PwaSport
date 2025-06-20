@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 
-const RegisterPage = ({ onNavigate, userType }) => {
+const RegisterPage = ({ onNavigate, userType, onLoginSuccess }) => {
     const [formData, setFormData] = useState({
         name: '',
         first_name: '',
@@ -65,8 +65,8 @@ const RegisterPage = ({ onNavigate, userType }) => {
             }
             if (!formData.phone_number.trim()) {
                 newErrors.phone_number = 'Nomor HP harus diisi';
-            } else if (!/^[\+]?[\d\s\-\(\)]+$/.test(formData.phone_number)) {
-                newErrors.phone_number = 'Format nomor HP tidak valid';
+            } else if (!/^[0-9+]{10,15}$/.test(formData.phone_number)) {
+                newErrors.phone_number = 'Format nomor HP tidak valid. Harus berupa angka 10-15 digit';
             }
         } else if (step === 2) {
             if (!formData.password) {
@@ -128,26 +128,30 @@ const RegisterPage = ({ onNavigate, userType }) => {
         setIsLoading(true);
         setErrors({});
 
+        const requestData = {
+            ...formData,
+            user_type: userType // Ensure user type is included
+        };
+        console.log('Registration request data:', requestData);
+
         try {
             const response = await fetch('/api/auth/register', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Accept': 'application/json',
-                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                    'Accept': 'application/json'
                 },
-                body: JSON.stringify({
-                    ...formData,
-                    user_type: userType // Ensure user type is included
-                })
+                body: JSON.stringify(requestData)
             });
 
             const data = await response.json();
+            console.log('Registration response:', data);
 
             if (data.status === 'success') {
-                alert(`Pendaftaran sebagai ${getUserTypeDisplay().title} berhasil! Silakan login dengan akun Anda.`);
-                onNavigate('login', userType);
+                // Auto-login after successful registration
+                onLoginSuccess(data.data.token, data.data.user, userType);
             } else {
+                console.error('Registration failed:', data);
                 if (data.errors) {
                     setErrors(data.errors);
                 } else {
@@ -269,7 +273,7 @@ const RegisterPage = ({ onNavigate, userType }) => {
                     className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent ${
                         errors.phone_number ? 'border-red-300 bg-red-50' : 'border-gray-300'
                     }`}
-                    placeholder="08xxxxxxxxxx"
+                    placeholder="081234567890"
                 />
                 {errors.phone_number && (
                     <p className="text-red-500 text-xs mt-1">{errors.phone_number}</p>
