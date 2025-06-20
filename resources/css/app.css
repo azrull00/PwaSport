@@ -1,0 +1,120 @@
+@import 'tailwindcss';
+
+@source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
+@source '../../storage/framework/views/*.php';
+@source '../**/*.blade.php';
+@source '../**/*.js';
+@source '../**/*.jsx';
+
+@theme {
+    --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
+        'Segoe UI Symbol', 'Noto Color Emoji';
+    
+    /* Custom SportPWA Colors */
+    --color-primary: #448EF7;
+    --color-primary-light: #6CA3FF;
+    --color-primary-dark: #2E7EE8;
+    --color-secondary: #F1F8FB;
+    --color-accent: #FF6B35;
+    --color-success: #28A745;
+    --color-warning: #FFC107;
+    --color-error: #DC3545;
+    --color-gray-50: #F8FAFB;
+    --color-gray-100: #F1F5F9;
+    --color-gray-200: #E2E8F0;
+    --color-gray-300: #CBD5E1;
+    --color-gray-400: #94A3B8;
+    --color-gray-500: #64748B;
+    --color-gray-600: #475569;
+    --color-gray-700: #334155;
+    --color-gray-800: #1E293B;
+    --color-gray-900: #0F172A;
+    
+    /* Mobile-first spacing */
+    --spacing: 0.25rem;
+    
+    /* Custom shadows for mobile UI */
+    --shadow-mobile: 0 2px 8px rgb(0 0 0 / 0.08);
+    --shadow-mobile-lg: 0 4px 12px rgb(0 0 0 / 0.12);
+    
+    /* Border radius for mobile components */
+    --radius-mobile: 12px;
+    --radius-mobile-lg: 16px;
+    --radius-mobile-xl: 20px;
+}
+
+/* SportPWA Utility Classes */
+.bg-primary { background-color: var(--color-primary); }
+.bg-primary-light { background-color: var(--color-primary-light); }
+.bg-primary-dark { background-color: var(--color-primary-dark); }
+.bg-secondary { background-color: var(--color-secondary); }
+.bg-accent { background-color: var(--color-accent); }
+.bg-success { background-color: var(--color-success); }
+.bg-warning { background-color: var(--color-warning); }
+.bg-error { background-color: var(--color-error); }
+
+.text-primary { color: var(--color-primary); }
+.text-primary-light { color: var(--color-primary-light); }
+.text-primary-dark { color: var(--color-primary-dark); }
+.text-secondary { color: var(--color-secondary); }
+.text-accent { color: var(--color-accent); }
+.text-success { color: var(--color-success); }
+.text-warning { color: var(--color-warning); }
+.text-error { color: var(--color-error); }
+
+.border-primary { border-color: var(--color-primary); }
+.border-primary-light { border-color: var(--color-primary-light); }
+.border-primary-dark { border-color: var(--color-primary-dark); }
+.border-secondary { border-color: var(--color-secondary); }
+.border-accent { border-color: var(--color-accent); }
+.border-success { border-color: var(--color-success); }
+.border-warning { border-color: var(--color-warning); }
+.border-error { border-color: var(--color-error); }
+
+.shadow-mobile { box-shadow: var(--shadow-mobile); }
+.shadow-mobile-lg { box-shadow: var(--shadow-mobile-lg); }
+
+.focus\:border-primary:focus { border-color: var(--color-primary); }
+.focus\:border-error:focus { border-color: var(--color-error); }
+.hover\:bg-primary-dark:hover { background-color: var(--color-primary-dark); }
+.hover\:bg-primary:hover { background-color: var(--color-primary); }
+
+/* Global mobile-first styles */
+body {
+    font-family: var(--font-sans);
+    background-color: var(--color-secondary);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+/* PWA specific styles */
+@media (display-mode: standalone) {
+    body {
+        user-select: none; /* Disable text selection for app-like feel */
+    }
+}
+
+/* Custom scrollbar for mobile */
+::-webkit-scrollbar {
+    width: 2px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--color-gray-300);
+    border-radius: 1px;
+}
+
+/* Mobile touch improvements */
+button, a, [role="button"] {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+}
+
+/* Bottom navigation safe area */
+.bottom-nav-safe {
+    padding-bottom: env(safe-area-inset-bottom);
+}
