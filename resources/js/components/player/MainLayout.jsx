@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import { HiHome, HiSearch, HiCalendar, HiUsers, HiChatAlt2, HiUser, HiTrendingUp, HiStar, HiChevronRight, HiLocationMarker, HiClock } from 'react-icons/hi';
+import { HiMiniArrowLeft } from 'react-icons/hi2';
 import DiscoveryPage from './DiscoveryPage';
 import MyEventsPage from './MyEventsPage';
 import ChatPage from './ChatPage';
@@ -7,6 +9,8 @@ import EventDetailPage from './EventDetailPage';
 import CommunityDetailPage from './CommunityDetailPage';
 import MatchmakingStatusPage from './MatchmakingStatusPage';
 import MatchHistoryPage from './MatchHistoryPage';
+import CourtManagementPage from './CourtManagementPage';
+import FriendsPage from './FriendsPage';
 
 const MainLayout = ({ userType, userToken, userData, onLogout }) => {
     const [activeTab, setActiveTab] = useState('home');
@@ -14,11 +18,12 @@ const MainLayout = ({ userType, userToken, userData, onLogout }) => {
     const [currentView, setCurrentView] = useState({ page: 'home', params: null });
 
     const navigationTabs = [
-        { id: 'home', icon: '🏠', label: 'Beranda' },
-        { id: 'discover', icon: '🔍', label: 'Jelajah' },
-        { id: 'events', icon: '📅', label: 'Event Saya' },
-        { id: 'chat', icon: '💬', label: 'Chat' },
-        { id: 'profile', icon: '👤', label: 'Profil' }
+        { id: 'home', icon: HiHome, label: 'Beranda' },
+        { id: 'discover', icon: HiSearch, label: 'Jelajah' },
+        { id: 'events', icon: HiCalendar, label: 'Event Saya' },
+        { id: 'friends', icon: HiUsers, label: 'Teman' },
+        { id: 'chat', icon: HiChatAlt2, label: 'Chat' },
+        { id: 'profile', icon: HiUser, label: 'Profil' }
     ];
 
     // Fetch updated user profile
@@ -73,10 +78,35 @@ const MainLayout = ({ userType, userToken, userData, onLogout }) => {
                 return <DiscoveryPage userToken={userToken} onNavigate={handleNavigation} />;
             case 'events':
                 return <MyEventsPage user={user} userToken={userToken} onNavigate={handleNavigation} />;
+            case 'friends':
+                return <FriendsPage 
+                    userToken={userToken} 
+                    onNavigate={handleNavigation}
+                    onStartPrivateChat={(userId) => {
+                        handleNavigation('chat');
+                        // We'll need to pass this to ChatPage somehow
+                        setTimeout(() => {
+                            // Trigger private chat start
+                            window.dispatchEvent(new CustomEvent('startPrivateChat', { detail: { userId } }));
+                        }, 100);
+                    }}
+                />;
             case 'chat':
                 return <ChatPage user={user} userToken={userToken} />;
             case 'profile':
-                return <ProfilePage user={user} userToken={userToken} onLogout={onLogout} onUserUpdate={setUser} onNavigate={handleNavigation} />;
+                return <ProfilePage 
+                    user={user} 
+                    userToken={userToken} 
+                    onLogout={onLogout} 
+                    onUserUpdate={setUser} 
+                    onNavigate={handleNavigation}
+                    onStartPrivateChat={(userId) => {
+                        handleNavigation('chat');
+                        setTimeout(() => {
+                            window.dispatchEvent(new CustomEvent('startPrivateChat', { detail: { userId } }));
+                        }, 100);
+                    }}
+                />;
             case 'eventDetail':
                 return (
                     <EventDetailPage 
@@ -101,12 +131,23 @@ const MainLayout = ({ userType, userToken, userData, onLogout }) => {
                         userToken={userToken} 
                         onNavigate={handleNavigation}
                         onBack={handleBack}
+                        eventId={currentView.params?.eventId}
                     />
                 );
             case 'matchHistory':
                 return (
                     <MatchHistoryPage 
                         userToken={userToken} 
+                        onNavigate={handleNavigation}
+                        onBack={handleBack}
+                    />
+                );
+            case 'courtManagement':
+                return (
+                    <CourtManagementPage 
+                        eventId={currentView.params?.eventId}
+                        userToken={userToken}
+                        userType={userType}
                         onNavigate={handleNavigation}
                         onBack={handleBack}
                     />
@@ -124,30 +165,44 @@ const MainLayout = ({ userType, userToken, userData, onLogout }) => {
             </div>
 
             {/* Bottom Navigation - Hide on detail pages */}
-            {!['eventDetail', 'communityDetail', 'matchmakingStatus', 'matchHistory'].includes(currentView.page) && (
-                <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-50">
-                    <div className="flex justify-around items-center py-2">
-                        {navigationTabs.map((tab) => (
-                            <button
-                                key={tab.id}
-                                onClick={() => handleNavigation(tab.id)}
-                                className={`flex flex-col items-center py-2 px-3 min-w-0 flex-1 ${
-                                    activeTab === tab.id 
-                                        ? 'text-primary' 
-                                        : 'text-gray-500 hover:text-gray-700'
-                                }`}
-                            >
-                                <span className="text-xl mb-1">{tab.icon}</span>
-                                <span className={`text-xs font-medium truncate ${
-                                    activeTab === tab.id ? 'text-primary' : 'text-gray-500'
-                                }`}>
-                                    {tab.label}
-                                </span>
-                                {activeTab === tab.id && (
-                                    <div className="w-4 h-0.5 bg-primary rounded-full mt-1"></div>
-                                )}
-                            </button>
-                        ))}
+            {!['eventDetail', 'communityDetail', 'matchmakingStatus', 'matchHistory', 'courtManagement'].includes(currentView.page) && (
+                <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 shadow-lg z-50">
+                    <div className="flex justify-around items-center px-2 py-3">
+                        {navigationTabs.map((tab) => {
+                            const IconComponent = tab.icon;
+                            const isActive = activeTab === tab.id;
+                            
+                            return (
+                                <button
+                                    key={tab.id}
+                                    onClick={() => handleNavigation(tab.id)}
+                                    className={`flex flex-col items-center py-1 px-3 min-w-0 flex-1 relative transition-all duration-200 ${
+                                        isActive 
+                                            ? 'text-blue-600' 
+                                            : 'text-gray-400 hover:text-gray-600 active:scale-95'
+                                    }`}
+                                >
+                                    <div className={`relative ${isActive ? 'transform -translate-y-1' : ''}`}>
+                                        <IconComponent 
+                                            className={`w-6 h-6 transition-all duration-200 ${
+                                                isActive ? 'text-blue-600' : 'text-gray-400'
+                                            }`} 
+                                        />
+                                        {isActive && (
+                                            <div className="absolute -top-1 -right-1 w-2 h-2 bg-blue-600 rounded-full"></div>
+                                        )}
+                                    </div>
+                                    <span className={`text-xs font-medium truncate mt-1 transition-all duration-200 ${
+                                        isActive ? 'text-blue-600 font-semibold' : 'text-gray-400'
+                                    }`}>
+                                        {tab.label}
+                                    </span>
+                                    {isActive && (
+                                        <div className="absolute bottom-0 w-12 h-1 bg-gradient-to-r from-blue-500 to-blue-600 rounded-full transition-all duration-200"></div>
+                                    )}
+                                </button>
+                            );
+                        })}
                     </div>
                 </div>
             )}
@@ -161,10 +216,49 @@ const HomePage = ({ user, userToken, onNavigate }) => {
     const [nearbyEvents, setNearbyEvents] = useState([]);
     const [communities, setCommunities] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [currentBadgeIndex, setCurrentBadgeIndex] = useState(0);
+    
+    const badges = [
+        {
+            id: 1,
+            title: "Sport Champions League",
+            subtitle: "Bergabung dengan turnamen terbesar",
+            image: "/storage/AppImages/placeholder1.png",
+            action: "Daftar Sekarang",
+            color: "from-blue-500 to-blue-700"
+        },
+        {
+            id: 2,
+            title: "Komunitas Sport Terbaru",
+            subtitle: "Temukan teman bermain di sekitar Anda",
+            image: "/storage/AppImages/placeholder2.png",
+            action: "Jelajahi",
+            color: "from-green-500 to-green-700"
+        },
+        {
+            id: 3,
+            title: "Event Premium",
+            subtitle: "Dapatkan pengalaman bermain terbaik",
+            image: "/storage/AppImages/placeholder3.png",
+            action: "Lihat Detail",
+            color: "from-purple-500 to-purple-700"
+        }
+    ];
 
     useEffect(() => {
         fetchDashboardData();
     }, [userToken]);
+
+    // Auto-slide badges every 5 seconds
+    useEffect(() => {
+        const interval = setInterval(() => {
+            setCurrentBadgeIndex((prevIndex) => 
+                prevIndex === badges.length - 1 ? 0 : prevIndex + 1
+            );
+        }, 5000);
+
+        return () => clearInterval(interval);
+    }, [badges.length]);
 
     const fetchDashboardData = async () => {
         try {
@@ -172,8 +266,32 @@ const HomePage = ({ user, userToken, onNavigate }) => {
             
             console.log('Frontend userToken:', userToken);
             
-            // Fetch nearby events
-            const eventsResponse = await fetch('/api/events?per_page=5&available_only=true', {
+            // Fetch user stats (joined events count)
+            const statsResponse = await fetch('/api/users/my-events?per_page=1', {
+                headers: {
+                    'Authorization': `Bearer ${userToken}`,
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                }
+            });
+
+            if (statsResponse.ok) {
+                const statsData = await statsResponse.json();
+                if (statsData.status === 'success') {
+                    let joinedEventsCount = 0;
+                    if (statsData.data.events) {
+                        if (Array.isArray(statsData.data.events)) {
+                            joinedEventsCount = statsData.data.events.length;
+                        } else if (statsData.data.events.total) {
+                            joinedEventsCount = statsData.data.events.total;
+                        }
+                    }
+                    setStats({ joinedEvents: joinedEventsCount });
+                }
+            }
+            
+            // Fetch nearby events (recommendations)
+            const eventsResponse = await fetch('/api/events/recommendations?limit=5', {
                 headers: {
                     'Authorization': `Bearer ${userToken}`,
                     'Content-Type': 'application/json',
@@ -186,21 +304,16 @@ const HomePage = ({ user, userToken, onNavigate }) => {
             if (eventsResponse.ok) {
                 const eventsData = await eventsResponse.json();
                 console.log('Events data from HomePage:', eventsData);
-                console.log('eventsData.data:', eventsData.data);
-                console.log('eventsData.data.events:', eventsData.data.events);
-                console.log('eventsData.data.events.data:', eventsData.data ? eventsData.data.events ? eventsData.data.events.data : 'events not found' : 'data not found');
                 
                 if (eventsData.status === 'success') {
-                    // Parse paginated events response
+                    // Parse recommendations response
                     let events = [];
-                    if (eventsData.data && eventsData.data.events && eventsData.data.events.data) {
-                        events = eventsData.data.events.data;
-                        console.log('SUCCESS: Found events array with length:', events.length);
-                    } else {
-                        console.log('FAILED: Events parsing condition failed');
-                        console.log('- eventsData.data exists:', !!eventsData.data);
-                        console.log('- eventsData.data.events exists:', !!(eventsData.data && eventsData.data.events));
-                        console.log('- eventsData.data.events.data exists:', !!(eventsData.data && eventsData.data.events && eventsData.data.events.data));
+                    if (eventsData.data && eventsData.data.recommendations) {
+                        events = eventsData.data.recommendations.map(rec => rec.event);
+                        console.log('SUCCESS: Found recommended events with length:', events.length);
+                    } else if (eventsData.data && eventsData.data.nearby_events) {
+                        events = eventsData.data.nearby_events;
+                        console.log('SUCCESS: Found nearby events with length:', events.length);
                     }
                     console.log('Final parsed events:', events);
                     setNearbyEvents(events);
@@ -269,129 +382,267 @@ const HomePage = ({ user, userToken, onNavigate }) => {
     }
 
     return (
-        <div className="p-6">
+        <div className="bg-secondary min-h-screen">
             {/* Header */}
-            <div className="mb-6">
-                <h1 className="text-2xl font-bold text-gray-900">
+            <div className="bg-white border-b border-gray-100 px-4 py-3">
+                <h1 className="text-lg font-semibold text-gray-900">
                     Halo, {user?.profile?.first_name || user?.name || 'Player'}! 👋
                 </h1>
-                <p className="text-gray-600 mt-1">Selamat datang di SportApp</p>
+                <p className="text-gray-600 text-sm mt-1">Selamat datang di SportApp</p>
             </div>
 
-            {/* Quick Stats */}
-            <div className="grid grid-cols-3 gap-4 mb-6">
-                <div className="bg-white rounded-xl p-4 text-center shadow-sm">
-                    <div className="text-2xl font-bold text-primary">{user?.credit_score || 100}</div>
-                    <div className="text-xs text-gray-600">Credit Score</div>
+            <div className="p-4">
+                {/* Badges Slider */}
+                <div className="mb-6">
+                    <div className="relative overflow-hidden rounded-xl shadow-sm">
+                        <div 
+                            className="flex badge-slide-transition"
+                            style={{ transform: `translateX(-${currentBadgeIndex * 100}%)` }}
+                        >
+                            {badges.map((badge, index) => (
+                                <div
+                                    key={badge.id}
+                                    className="w-full flex-shrink-0 relative"
+                                >
+                                    <div className={`bg-gradient-to-r ${badge.color} animated-gradient p-6 text-white relative overflow-hidden`}>
+                                        {/* Background Pattern */}
+                                        <div className="absolute inset-0 opacity-10">
+                                            <div className="absolute -top-4 -right-4 w-32 h-32 bg-white rounded-full"></div>
+                                            <div className="absolute -bottom-6 -left-6 w-24 h-24 bg-white rounded-full"></div>
+                                        </div>
+                                        
+                                        <div className="relative z-10 flex items-center justify-between">
+                                            <div className="flex-1">
+                                                <h3 className="text-xl font-bold mb-2">{badge.title}</h3>
+                                                <p className="text-white/90 mb-4 text-sm">{badge.subtitle}</p>
+                                                <button 
+                                                    onClick={() => onNavigate('discover')}
+                                                    className="bg-white/20 backdrop-blur-sm text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-white/30 transition-colors flex items-center"
+                                                >
+                                                    {badge.action}
+                                                    <HiChevronRight className="w-4 h-4 ml-1" />
+                                                </button>
+                                            </div>
+                                            <div className="ml-4 opacity-60">
+                                                <div className="w-16 h-16 bg-white/20 rounded-xl flex items-center justify-center">
+                                                    <HiStar className="w-8 h-8" />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                        
+                        {/* Slider Dots */}
+                        <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex space-x-2">
+                            {badges.map((_, index) => (
+                                <button
+                                    key={index}
+                                    onClick={() => setCurrentBadgeIndex(index)}
+                                    className={`w-2 h-2 rounded-full transition-colors ${
+                                        index === currentBadgeIndex ? 'bg-white' : 'bg-white/40'
+                                    }`}
+                                />
+                            ))}
+                        </div>
+                    </div>
                 </div>
-                <div className="bg-white rounded-xl p-4 text-center shadow-sm">
-                    <div className="text-2xl font-bold text-primary">0</div>
-                    <div className="text-xs text-gray-600">Event Joined</div>
-                </div>
-                <div className="bg-white rounded-xl p-4 text-center shadow-sm">
-                    <div className="text-2xl font-bold text-primary">{communities.length}</div>
-                    <div className="text-xs text-gray-600">Komunitas</div>
-                </div>
-            </div>
 
-            {/* Quick Actions */}
-            <div className="grid grid-cols-2 gap-4 mb-6">
-                <button 
-                    onClick={() => onNavigate('discover')}
-                    className="bg-primary text-white rounded-xl p-4 flex items-center justify-center space-x-2 shadow-sm hover:bg-primary-dark transition-colors"
-                >
-                    <span>🔍</span>
-                    <span className="font-semibold">Cari Event</span>
-                </button>
-                <button 
-                    onClick={() => onNavigate('events')}
-                    className="bg-white border-2 border-primary text-primary rounded-xl p-4 flex items-center justify-center space-x-2 shadow-sm hover:bg-primary-light transition-colors"
-                >
-                    <span>📅</span>
-                    <span className="font-semibold">Event Saya</span>
-                </button>
-            </div>
+                {/* Quick Stats */}
+                <div className="grid grid-cols-3 gap-3 mb-6">
+                    <div className="stat-card bg-white rounded-xl shadow-sm border border-gray-100 p-4 text-center hover:shadow-md transition-shadow dashboard-card">
+                        <div className="stat-card-icon w-10 h-10 bg-primary rounded-lg mx-auto mb-3 flex items-center justify-center">
+                            <HiTrendingUp className="w-5 h-5 text-white" />
+                        </div>
+                        <div className="text-xl font-bold text-gray-900">{user?.credit_score || 100}</div>
+                        <div className="text-xs text-gray-600">Credit Score</div>
+                    </div>
+                    <div 
+                        className="stat-card bg-white rounded-xl shadow-sm border border-gray-100 p-4 text-center cursor-pointer hover:shadow-md hover:border-primary/20 transition-all dashboard-card"
+                        onClick={() => onNavigate('events')}
+                    >
+                        <div className="stat-card-icon w-10 h-10 bg-primary rounded-lg mx-auto mb-3 flex items-center justify-center">
+                            <HiCalendar className="w-5 h-5 text-white" />
+                        </div>
+                        <div className="text-xl font-bold text-gray-900">{stats?.joinedEvents || 0}</div>
+                        <div className="text-xs text-gray-600">Event Joined</div>
+                    </div>
+                    <div className="stat-card bg-white rounded-xl shadow-sm border border-gray-100 p-4 text-center hover:shadow-md transition-shadow dashboard-card">
+                        <div className="stat-card-icon w-10 h-10 bg-primary rounded-lg mx-auto mb-3 flex items-center justify-center">
+                            <HiUsers className="w-5 h-5 text-white" />
+                        </div>
+                        <div className="text-xl font-bold text-gray-900">{communities.length}</div>
+                        <div className="text-xs text-gray-600">Komunitas</div>
+                    </div>
+                </div>
 
-            {/* Nearby Events */}
-            <div className="mb-6">
-                <div className="flex justify-between items-center mb-4">
-                    <h2 className="text-lg font-semibold text-gray-900">Event Terdekat</h2>
+                {/* Quick Actions */}
+                <div className="grid grid-cols-3 gap-3 mb-6">
                     <button 
                         onClick={() => onNavigate('discover')}
-                        className="text-primary text-sm font-medium hover:underline"
+                        className="quick-action-btn bg-primary text-white rounded-xl p-4 flex flex-col items-center justify-center space-y-2 shadow-sm hover:shadow-md hover:bg-primary-dark transition-all"
                     >
-                        Lihat Semua
+                        <HiSearch className="w-5 h-5" />
+                        <span className="font-medium text-xs">Cari Event</span>
                     </button>
-                </div>
-                
-                {nearbyEvents.length > 0 ? (
-                    <div className="space-y-3">
-                        {nearbyEvents.slice(0, 3).map((event) => (
-                            <div key={event.id} className="bg-white rounded-xl p-4 shadow-sm">
-                                <div className="flex justify-between items-start">
-                                    <div className="flex-1">
-                                        <h3 className="font-semibold text-gray-900">{event.title}</h3>
-                                        <p className="text-sm text-gray-600">{event.sport?.name}</p>
-                                        <p className="text-sm text-gray-500">{new Date(event.event_date).toLocaleDateString('id-ID')}</p>
-                                    </div>
-                                    <div className="text-right">
-                                        <span className="text-sm text-primary font-medium">
-                                            {event.available_slots} slot
-                                        </span>
-                                    </div>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                ) : (
-                    <div className="bg-white rounded-xl p-6 text-center shadow-sm">
-                        <p className="text-gray-500">Belum ada event terdekat</p>
-                    </div>
-                )}
-            </div>
-
-            {/* Communities */}
-            <div>
-                <div className="flex justify-between items-center mb-4">
-                    <h2 className="text-lg font-semibold text-gray-900">Komunitas Populer</h2>
                     <button 
-                        onClick={() => {
-                            onNavigate('discover');
-                            // Note: We'll need to set active tab to communities in DiscoveryPage
-                        }}
-                        className="text-primary text-sm font-medium hover:underline"
+                        onClick={() => onNavigate('events')}
+                        className="quick-action-btn bg-white border border-primary text-primary rounded-xl p-4 flex flex-col items-center justify-center space-y-2 shadow-sm hover:shadow-md hover:bg-primary/5 transition-all"
                     >
-                        Lihat Semua
+                        <HiCalendar className="w-5 h-5" />
+                        <span className="font-medium text-xs">Event Saya</span>
+                    </button>
+                    <button 
+                        onClick={() => onNavigate('matchmakingStatus')}
+                        className="quick-action-btn bg-primary text-white rounded-xl p-4 flex flex-col items-center justify-center space-y-2 shadow-sm hover:shadow-md hover:bg-primary-dark transition-all"
+                    >
+                        <HiTrendingUp className="w-5 h-5" />
+                        <span className="font-medium text-xs">Matchmaking</span>
                     </button>
                 </div>
-                
-                {communities.length > 0 ? (
-                    <div className="space-y-3">
-                        {communities.map((community) => (
-                            <div key={community.id} className="bg-white rounded-xl p-4 shadow-sm">
-                                <div className="flex items-center space-x-3">
-                                    <div className="w-12 h-12 bg-primary rounded-full flex items-center justify-center">
-                                        <span className="text-white font-bold">{community.name.charAt(0)}</span>
-                                    </div>
-                                    <div className="flex-1">
-                                        <h3 className="font-semibold text-gray-900">{community.name}</h3>
-                                        <p className="text-sm text-gray-600">{community.sport?.name}</p>
-                                        <p className="text-xs text-gray-500">{community.member_count} anggota</p>
+
+                {/* Recommended Events */}
+                <div className="mb-6">
+                    <div className="flex justify-between items-center mb-4">
+                        <h2 className="text-lg font-semibold text-gray-900 flex items-center">
+                            <HiStar className="w-5 h-5 mr-2 text-primary" />
+                            Rekomendasi untuk Anda
+                        </h2>
+                        <button 
+                            onClick={() => onNavigate('discover')}
+                            className="text-primary text-sm font-medium hover:underline flex items-center"
+                        >
+                            Lihat Semua
+                            <HiChevronRight className="w-4 h-4 ml-1" />
+                        </button>
+                    </div>
+                    
+                    {nearbyEvents.length > 0 ? (
+                        <div className="space-y-3 event-list">
+                            {nearbyEvents.slice(0, 3).map((event) => (
+                                <div 
+                                    key={event.id} 
+                                    className="event-card bg-white rounded-xl shadow-sm border border-gray-100 p-4 hover:shadow-md hover:border-primary/20 transition-all cursor-pointer"
+                                    onClick={() => onNavigate('eventDetail', { eventId: event.id })}
+                                >
+                                    <div className="flex justify-between items-start">
+                                        <div className="flex-1">
+                                            <h3 className="font-semibold text-gray-900 mb-2">{event.title}</h3>
+                                            
+                                            {/* Event Info Grid */}
+                                            <div className="grid grid-cols-2 gap-2 mb-3">
+                                                <div className="flex items-center text-sm text-gray-600">
+                                                    <span className="mr-2 text-primary">🏸</span>
+                                                    <span className="font-medium">{event.sport?.name}</span>
+                                                </div>
+                                                <div className="flex items-center text-sm text-gray-600">
+                                                    <HiUsers className="w-4 h-4 mr-2 text-primary" />
+                                                    <span>{event.max_participants} peserta</span>
+                                                </div>
+                                            </div>
+                                            
+                                            <div className="flex items-center text-sm text-gray-500 mb-2">
+                                                <HiCalendar className="w-4 h-4 mr-2" />
+                                                <span>{new Date(event.event_date).toLocaleDateString('id-ID')}</span>
+                                            </div>
+                                            <div className="flex items-center text-sm text-gray-500">
+                                                <HiLocationMarker className="w-4 h-4 mr-2" />
+                                                <span className="truncate">{event.location_name}</span>
+                                            </div>
+                                        </div>
+                                        <div className="text-right ml-4">
+                                            <div className="text-sm font-bold text-primary mb-1">
+                                                {event.entry_fee ? `Rp ${parseInt(event.entry_fee).toLocaleString()}` : 'GRATIS'}
+                                            </div>
+                                            <div className="text-xs text-gray-500 bg-gray-50 px-2 py-1 rounded">
+                                                {event.available_slots || event.max_participants} slot
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
+                            ))}
+                        </div>
+                    ) : (
+                        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 text-center dashboard-card">
+                            <div className="w-12 h-12 bg-gray-100 rounded-lg mx-auto mb-3 flex items-center justify-center">
+                                <HiSearch className="w-6 h-6 text-gray-400" />
                             </div>
-                        ))}
+                            <p className="text-gray-600 mb-3">Belum ada rekomendasi event</p>
+                            <button 
+                                onClick={() => onNavigate('discover')}
+                                className="bg-primary text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-primary-dark transition-colors"
+                            >
+                                Jelajahi Event
+                            </button>
+                        </div>
+                    )}
+                </div>
+
+                {/* Communities */}
+                <div>
+                    <div className="flex justify-between items-center mb-4">
+                        <h2 className="text-lg font-semibold text-gray-900 flex items-center">
+                            <HiUsers className="w-5 h-5 mr-2 text-primary" />
+                            Komunitas Populer
+                        </h2>
+                        <button 
+                            onClick={() => {
+                                onNavigate('discover');
+                            }}
+                            className="text-primary text-sm font-medium hover:underline flex items-center"
+                        >
+                            Lihat Semua
+                            <HiChevronRight className="w-4 h-4 ml-1" />
+                        </button>
                     </div>
-                ) : (
-                    <div className="bg-white rounded-xl p-6 text-center shadow-sm">
-                        <p className="text-gray-500">Belum ada komunitas</p>
-                    </div>
-                )}
+                    
+                    {communities.length > 0 ? (
+                        <div className="space-y-3">
+                            {communities.map((community) => (
+                                <div 
+                                    key={community.id} 
+                                    className="community-card bg-white rounded-xl shadow-sm border border-gray-100 p-4 hover:shadow-md hover:border-primary/20 transition-all cursor-pointer"
+                                    onClick={() => onNavigate('communityDetail', { communityId: community.id })}
+                                >
+                                    <div className="flex items-center space-x-3">
+                                        <div className="w-12 h-12 bg-primary rounded-lg flex items-center justify-center">
+                                            <span className="text-white font-bold text-lg">{community.name.charAt(0)}</span>
+                                        </div>
+                                        <div className="flex-1">
+                                            <h3 className="font-semibold text-gray-900">{community.name}</h3>
+                                            <div className="flex items-center text-sm text-gray-600 mt-1">
+                                                <span className="mr-2 text-primary">🏸</span>
+                                                <span className="font-medium">{community.sport?.name}</span>
+                                            </div>
+                                            <div className="flex items-center text-xs text-gray-500 mt-1">
+                                                <HiUsers className="w-3 h-3 mr-1" />
+                                                <span>{community.member_count} anggota</span>
+                                            </div>
+                                        </div>
+                                        <HiChevronRight className="w-5 h-5 text-gray-400" />
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    ) : (
+                        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 text-center dashboard-card">
+                            <div className="w-12 h-12 bg-gray-100 rounded-lg mx-auto mb-3 flex items-center justify-center">
+                                <HiUsers className="w-6 h-6 text-gray-400" />
+                            </div>
+                            <p className="text-gray-600 mb-3">Belum ada komunitas</p>
+                            <button 
+                                onClick={() => onNavigate('discover')}
+                                className="bg-primary text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-primary-dark transition-colors"
+                            >
+                                Jelajahi Komunitas
+                            </button>
+                        </div>
+                    )}
+                </div>
             </div>
         </div>
     );
 };
-
-
 
 export default MainLayout; 

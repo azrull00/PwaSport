@@ -115,6 +115,11 @@ class User extends Authenticatable
             ->orWhere('player2_id', $this->id);
     }
 
+    public function matches()
+    {
+        return $this->allMatches();
+    }
+
     public function hasActiveMatch()
     {
         return MatchHistory::where(function($query) {
@@ -225,6 +230,59 @@ class User extends Authenticatable
         return $this->hasMany(UserReport::class, 'assigned_admin_id');
     }
 
+    // Friendship relationships
+    public function friendships()
+    {
+        return $this->hasMany(Friendship::class, 'user_id');
+    }
+
+    public function reverseFriendships()
+    {
+        return $this->hasMany(Friendship::class, 'friend_id');
+    }
+
+    public function friends()
+    {
+        // Get all accepted friendships where user is either user_id or friend_id
+        $userFriends = $this->friendships()->accepted()->with('friend');
+        $reverseFriends = $this->reverseFriendships()->accepted()->with('user');
+        
+        return $userFriends->get()->pluck('friend')
+            ->merge($reverseFriends->get()->pluck('user'))
+            ->unique('id');
+    }
+
+    public function sentFriendRequests()
+    {
+        return $this->hasMany(FriendRequest::class, 'sender_id');
+    }
+
+    public function receivedFriendRequests()
+    {
+        return $this->hasMany(FriendRequest::class, 'receiver_id');
+    }
+
+    public function pendingFriendRequests()
+    {
+        return $this->receivedFriendRequests()->pending();
+    }
+
+    // Private Messages relationships
+    public function sentMessages()
+    {
+        return $this->hasMany(PrivateMessage::class, 'sender_id');
+    }
+
+    public function receivedMessages()
+    {
+        return $this->hasMany(PrivateMessage::class, 'receiver_id');
+    }
+
+    public function unreadMessages()
+    {
+        return $this->receivedMessages()->unread();
+    }
+
     // Helper methods
     public function getSportRating($sportId)
     {
@@ -239,5 +297,68 @@ class User extends Authenticatable
     public function isBlockedByUser($userId)
     {
         return $this->blockedByUsers()->where('blocking_user_id', $userId)->exists();
+    }
+
+    // Friendship helper methods
+    public function isFriendsWith($userId)
+    {
+        return Friendship::areFriends($this->id, $userId);
+    }
+
+    public function hasPendingFriendRequestFrom($userId)
+    {
+        return FriendRequest::hasPendingRequest($userId, $this->id);
+    }
+
+    public function hasSentFriendRequestTo($userId)
+    {
+        return FriendRequest::hasPendingRequest($this->id, $userId);
+    }
+
+    public function getFriendshipStatusWith($userId)
+    {
+        return Friendship::getFriendshipStatus($this->id, $userId);
+    }
+
+    public function getFriendRequestStatusWith($userId)
+    {
+        // Check if this user sent a request to the other user
+        $sentRequest = FriendRequest::getRequestStatus($this->id, $userId);
+        if ($sentRequest) {
+            return ['type' => 'sent', 'status' => $sentRequest];
+        }
+
+        // Check if this user received a request from the other user
+        $receivedRequest = FriendRequest::getRequestStatus($userId, $this->id);
+        if ($receivedRequest) {
+            return ['type' => 'received', 'status' => $receivedRequest];
+        }
+
+        return null;
+    }
+
+    public function canSendFriendRequestTo($userId)
+    {
+        // Can't send to self
+        if ($this->id == $userId) {
+            return false;
+        }
+
+        // Can't send if already friends
+        if ($this->isFriendsWith($userId)) {
+            return false;
+        }
+
+        // Can't send if there's already a pending request (either direction)
+        if ($this->hasPendingFriendRequestFrom($userId) || $this->hasSentFriendRequestTo($userId)) {
+            return false;
+        }
+
+        // Can't send if user is blocked
+        if ($this->hasBlockedUser($userId) || $this->isBlockedByUser($userId)) {
+            return false;
+        }
+
+        return true;
     }
 }

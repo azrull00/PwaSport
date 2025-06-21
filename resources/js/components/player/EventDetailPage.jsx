@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import { HiArrowLeft, HiLocationMarker, HiCalendar, HiClock, HiUsers, HiStar, HiOfficeBuilding } from 'react-icons/hi';
+import { HiUserGroup, HiEye } from 'react-icons/hi2';
 import QRCode from 'qrcode';
 import { getUserIdFromToken } from '../../utils/auth';
 
@@ -13,6 +15,7 @@ const EventDetailPage = ({ eventId, userToken, onNavigate, onBack }) => {
     const [showQRCode, setShowQRCode] = useState(false);
     const [userQR, setUserQR] = useState(null);
     const [qrCodeUrl, setQrCodeUrl] = useState(null);
+    const [isHost, setIsHost] = useState(false);
 
     useEffect(() => {
         if (eventId && userToken) {
@@ -35,13 +38,17 @@ const EventDetailPage = ({ eventId, userToken, onNavigate, onBack }) => {
             if (data.status === 'success') {
                 setEvent(data.data.event);
                 
-                // Check if user is already a participant
+                // Check if user is already a participant and if user is host
                 const userId = getUserIdFromToken(userToken);
                 if (userId) {
                     const userParticipant = data.data.event.participants?.find(p => p.user_id === userId);
                     setUserParticipation(userParticipant || null);
+                    
+                    // Check if user is the host
+                    setIsHost(data.data.event.host_id === parseInt(userId));
                 } else {
                     setUserParticipation(null);
+                    setIsHost(false);
                 }
             } else {
                 setError('Gagal memuat detail event');
@@ -108,9 +115,9 @@ const EventDetailPage = ({ eventId, userToken, onNavigate, onBack }) => {
 
             const data = await response.json();
             if (data.status === 'success') {
-                // Reload event details and participants
-                await loadEventDetails();
-                await loadParticipants();
+                // Show success message and redirect to My Events
+                alert('Berhasil bergabung dengan event!');
+                onNavigate('events'); // Redirect to My Events page
             } else {
                 setError(data.message || 'Gagal bergabung dengan event');
             }
@@ -226,9 +233,7 @@ const EventDetailPage = ({ eventId, userToken, onNavigate, onBack }) => {
                         onClick={onBack}
                         className="p-1 hover:bg-gray-100 rounded-lg transition-colors mr-3"
                     >
-                        <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                        </svg>
+                        <HiArrowLeft className="w-6 h-6 text-gray-600" />
                     </button>
                     <h1 className="text-lg font-semibold text-gray-900">Detail Event</h1>
                 </div>
@@ -248,9 +253,7 @@ const EventDetailPage = ({ eventId, userToken, onNavigate, onBack }) => {
                         onClick={onBack}
                         className="p-1 hover:bg-gray-100 rounded-lg transition-colors mr-3"
                     >
-                        <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                        </svg>
+                        <HiArrowLeft className="w-6 h-6 text-gray-600" />
                     </button>
                     <h1 className="text-lg font-semibold text-gray-900">Detail Event</h1>
                 </div>
@@ -275,9 +278,7 @@ const EventDetailPage = ({ eventId, userToken, onNavigate, onBack }) => {
                     onClick={onBack}
                     className="p-1 hover:bg-gray-100 rounded-lg transition-colors mr-3"
                 >
-                    <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                    </svg>
+                    <HiArrowLeft className="w-6 h-6 text-gray-600" />
                 </button>
                 <h1 className="text-lg font-semibold text-gray-900">Detail Event</h1>
             </div>
@@ -310,49 +311,49 @@ const EventDetailPage = ({ eventId, userToken, onNavigate, onBack }) => {
 
                     <div className="space-y-3">
                         <div className="flex items-center text-gray-700">
-                            <span className="mr-3">🏸</span>
+                            <span className="mr-3 text-blue-600">🏸</span>
                             <span>{event.sport?.name || 'Sport'}</span>
                         </div>
                         
                         <div className="flex items-center text-gray-700">
-                            <span className="mr-3">📅</span>
+                            <HiCalendar className="w-5 h-5 mr-3 text-blue-600" />
                             <span>{formatDate(event.event_date)}</span>
                         </div>
                         
                         <div className="flex items-center text-gray-700">
-                            <span className="mr-3">⏰</span>
+                            <HiClock className="w-5 h-5 mr-3 text-blue-600" />
                             <span>{formatTime(event.start_time)} - {formatTime(event.end_time)}</span>
                         </div>
                         
                         <div className="flex items-center text-gray-700">
-                            <span className="mr-3">📍</span>
+                            <HiLocationMarker className="w-5 h-5 mr-3 text-blue-600" />
                             <span>{event.location_name}</span>
                         </div>
                         
                         <div className="flex items-center text-gray-700">
-                            <span className="mr-3">👥</span>
+                            <HiUsers className="w-5 h-5 mr-3 text-blue-600" />
                             <span>{participants.length}/{event.max_participants} peserta</span>
                         </div>
 
                         {event.skill_level_required && (
                             <div className="flex items-center text-gray-700">
-                                <span className="mr-3">⭐</span>
+                                <HiStar className="w-5 h-5 mr-3 text-blue-600" />
                                 <span>Level: {event.skill_level_required}</span>
                             </div>
                         )}
 
                         {event.community && (
                             <div className="flex items-center text-gray-700">
-                                <span className="mr-3">🏢</span>
+                                <HiOfficeBuilding className="w-5 h-5 mr-3 text-blue-600" />
                                 <span>Komunitas: {event.community.name}</span>
                             </div>
                         )}
                     </div>
 
                     {/* Action Buttons */}
-                    <div className="mt-6 flex space-x-3">
+                    <div className="mt-6 space-y-3">
                         {!isPastEvent && (
-                            <>
+                            <div className="flex space-x-3">
                                 {!isUserParticipant ? (
                                     <button
                                         onClick={handleJoinEvent}
@@ -371,28 +372,82 @@ const EventDetailPage = ({ eventId, userToken, onNavigate, onBack }) => {
                                                 🎫 QR Code
                                             </button>
                                         )}
-                                        <button
-                                            onClick={handleLeaveEvent}
-                                            disabled={isLeaving}
-                                            className="flex-1 bg-red-500 text-white py-3 rounded-lg font-medium hover:bg-red-600 transition-colors disabled:opacity-50"
-                                        >
-                                            {isLeaving ? 'Keluar...' : 'Keluar'}
-                                        </button>
+                                        {!isHost && (
+                                            <button
+                                                onClick={handleLeaveEvent}
+                                                disabled={isLeaving}
+                                                className="flex-1 bg-red-500 text-white py-3 rounded-lg font-medium hover:bg-red-600 transition-colors disabled:opacity-50"
+                                            >
+                                                {isLeaving ? 'Keluar...' : 'Keluar'}
+                                            </button>
+                                        )}
                                     </>
                                 )}
-                            </>
+                            </div>
+                        )}
+
+                        {/* Host Management Buttons */}
+                        {isHost && !isPastEvent && (
+                            <div className="grid grid-cols-1 gap-3">
+                                <button
+                                    onClick={() => onNavigate('courtManagement', { eventId: event.id })}
+                                    className="w-full bg-orange-500 text-white py-3 px-4 rounded-lg font-medium hover:bg-orange-600 transition-colors flex items-center justify-center"
+                                >
+                                    <span className="mr-2">🏸</span>
+                                    Kelola Court & Queue
+                                </button>
+                                <button
+                                    onClick={() => onNavigate('matchmakingStatus', { eventId: event.id })}
+                                    className="w-full bg-blue-500 text-white py-3 px-4 rounded-lg font-medium hover:bg-blue-600 transition-colors flex items-center justify-center"
+                                >
+                                    <span className="mr-2">⚡</span>
+                                    Lihat Status Matchmaking
+                                </button>
+                            </div>
+                        )}
+
+                        {/* Player View Buttons - Show for participants */}
+                        {isUserParticipant && !isHost && !isPastEvent && (
+                            <div className="grid grid-cols-1 gap-3">
+                                <button
+                                    onClick={() => onNavigate('matchmakingStatus', { eventId: event.id })}
+                                    className="w-full bg-blue-500 text-white py-3 px-4 rounded-lg font-medium hover:bg-blue-600 transition-colors flex items-center justify-center"
+                                >
+                                    <HiEye className="w-5 h-5 mr-2" />
+                                    Lihat Status Matchmaking
+                                </button>
+                            </div>
                         )}
                     </div>
 
-                    {/* Participation Status */}
+                    {/* Participation Status - Enhanced */}
                     {isUserParticipant && (
-                        <div className="mt-4 p-3 rounded-lg bg-green-50 border border-green-200">
-                            <p className="text-green-800 text-sm">
-                                Status: {userParticipation.status === 'confirmed' ? 'Terkonfirmasi' : 
-                                        userParticipation.status === 'waiting' ? 'Waiting List' : 
-                                        userParticipation.status === 'checked_in' ? 'Sudah Check-in' : 
-                                        'Terdaftar'}
-                            </p>
+                        <div className="mt-4 p-4 rounded-lg bg-green-50 border-2 border-green-200">
+                            <div className="flex items-center">
+                                <div className="w-3 h-3 bg-green-500 rounded-full mr-3 animate-pulse"></div>
+                                <div className="flex-1">
+                                    <p className="text-green-800 font-semibold">
+                                        ✅ Anda sudah bergabung dengan event ini
+                                    </p>
+                                    <p className="text-green-700 text-sm mt-1">
+                                        Status: {userParticipation?.status === 'confirmed' ? '✅ Terkonfirmasi' : 
+                                                userParticipation?.status === 'waiting' ? '⏳ Dalam Antrian' : 
+                                                userParticipation?.status === 'checked_in' ? '🎫 Sudah Check-in' : 
+                                                userParticipation?.status === 'registered' ? '📝 Terdaftar' :
+                                                '👥 Bergabung'}
+                                    </p>
+                                    {userParticipation?.queue_position && (
+                                        <p className="text-green-600 text-sm mt-1">
+                                            Posisi antrian: #{userParticipation.queue_position}
+                                        </p>
+                                    )}
+                                    {userParticipation?.registered_at && (
+                                        <p className="text-green-600 text-xs mt-1">
+                                            Terdaftar pada: {new Date(userParticipation.registered_at).toLocaleString('id-ID')}
+                                        </p>
+                                    )}
+                                </div>
+                            </div>
                         </div>
                     )}
                 </div>

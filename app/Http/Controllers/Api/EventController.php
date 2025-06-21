@@ -8,6 +8,8 @@ use App\Models\Event;
 use App\Models\EventParticipant;
 use App\Models\Community;
 use App\Services\EmailNotificationService;
+use App\Services\EventRecommendationService;
+use App\Services\NotificationSchedulerService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
@@ -17,10 +19,17 @@ use Carbon\Carbon;
 class EventController extends Controller
 {
     protected $notificationService;
+    protected $recommendationService;
+    protected $notificationScheduler;
 
-    public function __construct(EmailNotificationService $notificationService)
-    {
+    public function __construct(
+        EmailNotificationService $notificationService,
+        EventRecommendationService $recommendationService,
+        NotificationSchedulerService $notificationScheduler
+    ) {
         $this->notificationService = $notificationService;
+        $this->recommendationService = $recommendationService;
+        $this->notificationScheduler = $notificationScheduler;
     }
 
     /**
@@ -95,6 +104,9 @@ class EventController extends Controller
             $events->getCollection()->transform(function ($event) {
                 $event->available_slots = $event->available_slots;
                 $event->is_full = $event->isFull();
+                $event->participants_count = $event->participants()->whereIn('status', ['confirmed', 'registered'])->count();
+                $event->confirmed_participants_count = $event->confirmedParticipants()->count();
+                $event->waiting_participants_count = $event->waitingParticipants()->count();
                 return $event;
             });
 
@@ -252,6 +264,9 @@ class EventController extends Controller
                 ? 'Anda telah ditambahkan ke waiting list.'
                 : 'Anda berhasil terdaftar untuk event ini!';
 
+            // Send notification
+            $this->notificationScheduler->notifyEventJoined($user->id, $event);
+
             return response()->json([
                 'status' => 'success',
                 'message' => $message,
@@ -291,34 +306,62 @@ class EventController extends Controller
             }
 
             // Check if it's too late to cancel (24 hours before event)
-            $eventStart = Carbon::parse($event->event_date . ' ' . $event->start_time);
-            $hoursUntilEvent = now()->diffInHours($eventStart, false);
+            try {
+                // Handle different possible date formats
+                if ($event->start_time) {
+                    $eventStart = Carbon::parse($event->event_date . ' ' . $event->start_time);
+                } else {
+                    $eventStart = Carbon::parse($event->event_date);
+                }
+                
+                $hoursUntilEvent = now()->diffInHours($eventStart, false);
 
-            if ($hoursUntilEvent < 24 && $hoursUntilEvent > 0) {
-                // Late cancellation penalty
-                $user->credit_score -= 10;
-                $user->save();
+                if ($hoursUntilEvent < 24 && $hoursUntilEvent > 0) {
+                    // Late cancellation penalty
+                    $user->credit_score -= 10;
+                    $user->save();
 
-                // Log credit score change
-                $user->creditScoreLogs()->create([
-                    'action_type' => 'late_cancel',
-                    'points_change' => -10,
-                    'previous_score' => $user->credit_score + 10,
-                    'new_score' => $user->credit_score,
-                    'reason' => 'Pembatalan mendadak (kurang dari 24 jam)',
-                    'event_id' => $event->id,
-                ]);
+                    // Log credit score change
+                    $user->creditScoreLogs()->create([
+                        'action_type' => 'late_cancel',
+                        'points_change' => -10,
+                        'previous_score' => $user->credit_score + 10,
+                        'new_score' => $user->credit_score,
+                        'reason' => 'Pembatalan mendadak (kurang dari 24 jam)',
+                        'event_id' => $event->id,
+                    ]);
 
-                // Send notification
-                $this->notificationService->sendCreditScoreChange($user, [
-                    'new_score' => $user->credit_score,
-                    'change' => -10,
-                    'reason' => 'Late cancellation'
-                ]);
+                    // Send notification if service exists
+                    if ($this->notificationService) {
+                        try {
+                            $this->notificationService->sendCreditScoreChange($user, [
+                                'new_score' => $user->credit_score,
+                                'change' => -10,
+                                'reason' => 'Late cancellation'
+                            ]);
+                        } catch (\Exception $e) {
+                            // Log notification error but don't fail the main process
+                            \Log::warning('Failed to send credit score notification: ' . $e->getMessage());
+                        }
+                    }
+                }
+            } catch (\Exception $e) {
+                // If date parsing fails, continue without penalty
+                \Log::warning('Failed to parse event date for late cancellation check: ' . $e->getMessage());
             }
 
             // Remove participation
             $participation->delete();
+
+            // Send notification if service exists
+            if ($this->notificationScheduler) {
+                try {
+                    $this->notificationScheduler->notifyEventLeft($user->id, $event);
+                } catch (\Exception $e) {
+                    // Log notification error but don't fail the main process
+                    \Log::warning('Failed to send event left notification: ' . $e->getMessage());
+                }
+            }
 
             // Promote waiting list if needed
             $this->promoteFromWaitingList($event);
@@ -329,10 +372,12 @@ class EventController extends Controller
             ]);
 
         } catch (\Exception $e) {
+            \Log::error('Error in leaveEvent: ' . $e->getMessage() . ' | Trace: ' . $e->getTraceAsString());
+            
             return response()->json([
                 'status' => 'error',
                 'message' => 'Terjadi kesalahan saat keluar dari event.',
-                'error' => $e->getMessage()
+                'error' => config('app.debug') ? $e->getMessage() : 'Internal server error'
             ], 500);
         }
     }
@@ -946,6 +991,59 @@ class EventController extends Controller
             return response()->json([
                 'status' => 'error',
                 'message' => 'Terjadi kesalahan saat mengambil thumbnail.',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Get personalized event recommendations for user
+     */
+    public function getRecommendations(Request $request)
+    {
+        try {
+            $user = Auth::user();
+            
+            if (!$user) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'User not authenticated.'
+                ], 401);
+            }
+
+            $limit = $request->get('limit', 10);
+            $recommendations = $this->recommendationService->getRecommendationsForUser($user, $limit);
+
+            // Get regular nearby events as fallback
+            $nearbyEvents = Event::with(['sport', 'community', 'host.profile'])
+                ->where('status', 'published')
+                ->where('event_date', '>=', now())
+                ->where('registration_deadline', '>=', now())
+                ->whereDoesntHave('participants', function($query) use ($user) {
+                    $query->where('user_id', $user->id);
+                })
+                ->orderBy('event_date', 'asc')
+                ->limit(5)
+                ->get();
+
+            return response()->json([
+                'status' => 'success',
+                'data' => [
+                    'user_id' => $user->id,
+                    'subscription_tier' => $user->subscription_tier,
+                    'recommendations' => $recommendations,
+                    'nearby_events' => $nearbyEvents,
+                    'recommendation_count' => count($recommendations),
+                    'message' => count($recommendations) > 0 ? 
+                        'Rekomendasi berdasarkan preferensi dan level skill Anda' : 
+                        'Belum ada rekomendasi khusus, berikut event terdekat'
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Terjadi kesalahan saat mengambil rekomendasi event.',
                 'error' => $e->getMessage()
             ], 500);
         }

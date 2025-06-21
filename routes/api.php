@@ -58,9 +58,13 @@ Route::middleware('auth:sanctum')->group(function () {
         
         // Profile management
         Route::get('/profile', [UserController::class, 'getProfile']);
-        Route::put('/profile', [UserController::class, 'updateProfile']);
+        Route::post('/profile', [UserController::class, 'updateProfile']);
+        Route::get('/profile-picture', [UserController::class, 'getProfilePicture']);
         Route::post('/upload-profile-picture', [UserController::class, 'uploadProfilePicture']);
-        Route::delete('/delete-profile-picture', [UserController::class, 'deleteProfilePicture']);
+        Route::delete('/profile-picture', [UserController::class, 'deleteProfilePicture']);
+        
+        // Public profile access
+        Route::get('/{userId}/profile', [UserController::class, 'getPublicProfile']);
         
         Route::get('/{user}', [UserController::class, 'show']);
         Route::put('/{user}', [UserController::class, 'update']);
@@ -81,6 +85,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // Events routes
     Route::prefix('events')->group(function () {
         Route::get('/', [EventController::class, 'index']);
+        Route::get('/recommendations', [EventController::class, 'getRecommendations']);
         Route::post('/', [EventController::class, 'store']);
         Route::get('/{event}', [EventController::class, 'show']);
         Route::put('/{event}', [EventController::class, 'update']);
@@ -118,6 +123,7 @@ Route::middleware('auth:sanctum')->group(function () {
         // Community ratings
         Route::post('/{community}/rate', [CommunityController::class, 'rateCommunity']);
         Route::get('/{community}/ratings', [CommunityController::class, 'getRatings']);
+        Route::get('/{community}/user-past-events', [CommunityController::class, 'getUserPastEvents']);
         
         // Community events
         Route::get('/{community}/events', [CommunityController::class, 'getEvents']);
@@ -253,10 +259,20 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Matchmaking System
     Route::group(['middleware' => 'auth:sanctum'], function () {
-        Route::get('matchmaking/{eventId}', [MatchmakingController::class, 'getMatchmakingStatus']);
-        Route::post('matchmaking/{eventId}/generate', [MatchmakingController::class, 'generateEventMatchmaking']);
-        Route::post('matchmaking/{eventId}/save', [MatchmakingController::class, 'saveMatchmaking']);
-        Route::post('matchmaking/{eventId}/fair-matches', [MatchmakingController::class, 'createFairMatches']);
+            Route::get('matchmaking/{eventId}', [MatchmakingController::class, 'getMatchmakingStatus']);
+    Route::post('matchmaking/{eventId}/generate', [MatchmakingController::class, 'generateEventMatchmaking']);
+    Route::post('matchmaking/{eventId}/save', [MatchmakingController::class, 'saveMatchmaking']);
+    Route::post('matchmaking/{eventId}/fair-matches', [MatchmakingController::class, 'createFairMatches']);
+    
+    // Event matchmaking status for participants
+    Route::get('matchmaking/{eventId}/event-matchmaking-status', [MatchmakingController::class, 'getEventMatchmakingStatus']);
+    
+    // Court Management routes
+    Route::get('matchmaking/{eventId}/court-status', [MatchmakingController::class, 'getCourtStatus']);
+    Route::post('matchmaking/{eventId}/assign-court', [MatchmakingController::class, 'assignCourt']);
+    Route::post('matchmaking/{eventId}/override-player', [MatchmakingController::class, 'overridePlayer']);
+    Route::post('matchmaking/{eventId}/start-match/{matchId}', [MatchmakingController::class, 'startMatch']);
+    Route::get('matchmaking/{eventId}/next-round-suggestions', [MatchmakingController::class, 'getNextRoundSuggestions']);
     });
 
     // Venue Management
@@ -271,5 +287,41 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('venues', [VenueController::class, 'store']);
         Route::put('venues/{id}', [VenueController::class, 'update']);
         Route::delete('venues/{id}', [VenueController::class, 'destroy']);
+    });
+
+    // Friend System routes
+    Route::prefix('friends')->group(function () {
+        // Friends list and management
+        Route::get('/', [App\Http\Controllers\Api\FriendController::class, 'getFriends']);
+        Route::delete('/{friendId}', [App\Http\Controllers\Api\FriendController::class, 'removeFriend']);
+        
+        // Friend requests
+        Route::post('/request', [App\Http\Controllers\Api\FriendController::class, 'sendFriendRequest']);
+        Route::get('/requests/pending', [App\Http\Controllers\Api\FriendController::class, 'getPendingRequests']);
+        Route::get('/requests/sent', [App\Http\Controllers\Api\FriendController::class, 'getSentRequests']);
+        Route::post('/requests/{requestId}/accept', [App\Http\Controllers\Api\FriendController::class, 'acceptFriendRequest']);
+        Route::post('/requests/{requestId}/reject', [App\Http\Controllers\Api\FriendController::class, 'rejectFriendRequest']);
+        Route::delete('/requests/{requestId}', [App\Http\Controllers\Api\FriendController::class, 'cancelFriendRequest']);
+        
+        // Friendship status and search
+        Route::get('/status/{userId}', [App\Http\Controllers\Api\FriendController::class, 'getFriendshipStatus']);
+        Route::get('/search', [App\Http\Controllers\Api\FriendController::class, 'searchUsers']);
+    });
+
+    // Private Messaging routes
+    Route::prefix('messages')->group(function () {
+        // Conversations
+        Route::get('/conversations', [App\Http\Controllers\Api\PrivateMessageController::class, 'getConversations']);
+        Route::get('/conversations/{userId}', [App\Http\Controllers\Api\PrivateMessageController::class, 'getConversation']);
+        Route::delete('/conversations/{userId}', [App\Http\Controllers\Api\PrivateMessageController::class, 'deleteConversation']);
+        
+        // Messages
+        Route::post('/send', [App\Http\Controllers\Api\PrivateMessageController::class, 'sendMessage']);
+        Route::post('/{messageId}/read', [App\Http\Controllers\Api\PrivateMessageController::class, 'markAsRead']);
+        Route::post('/read-all/{userId}', [App\Http\Controllers\Api\PrivateMessageController::class, 'markAllAsRead']);
+        Route::delete('/{messageId}', [App\Http\Controllers\Api\PrivateMessageController::class, 'deleteMessage']);
+        
+        // Unread count
+        Route::get('/unread-count', [App\Http\Controllers\Api\PrivateMessageController::class, 'getUnreadCount']);
     });
 }); 

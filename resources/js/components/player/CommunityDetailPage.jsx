@@ -22,15 +22,29 @@ const CommunityDetailPage = ({ communityId, userToken, onNavigate, onBack }) => 
     const [community, setCommunity] = useState(null);
     const [members, setMembers] = useState([]);
     const [userMembership, setUserMembership] = useState(null);
+    const [ratings, setRatings] = useState([]);
+    const [userRating, setUserRating] = useState(null);
+    const [pastEvents, setPastEvents] = useState([]);
+    const [selectedEvent, setSelectedEvent] = useState(null);
+    const [showRatingForm, setShowRatingForm] = useState(false);
+    const [ratingData, setRatingData] = useState({
+        event_id: null,
+        skill_rating: 5,
+        hospitality_rating: 5,
+        review: ''
+    });
     const [isLoading, setIsLoading] = useState(true);
     const [isJoining, setIsJoining] = useState(false);
     const [isLeaving, setIsLeaving] = useState(false);
+    const [isSubmittingRating, setIsSubmittingRating] = useState(false);
     const [error, setError] = useState('');
 
     useEffect(() => {
         if (communityId && userToken) {
             loadCommunityDetails();
             loadMembers();
+            loadRatings();
+            loadPastEvents();
         }
     }, [communityId, userToken]);
 
@@ -158,6 +172,132 @@ const CommunityDetailPage = ({ communityId, userToken, onNavigate, onBack }) => 
         } finally {
             setIsLeaving(false);
         }
+    };
+
+    const loadRatings = async () => {
+        try {
+            const response = await fetch(`/api/communities/${communityId}/ratings`, {
+                headers: {
+                    'Authorization': `Bearer ${userToken}`,
+                    'Accept': 'application/json'
+                }
+            });
+
+            const data = await response.json();
+            if (data.status === 'success') {
+                const ratings = data.data.ratings?.data || [];
+                setRatings(ratings);
+                
+                // Check if current user has already rated for any event
+                const userId = getUserIdFromToken(userToken);
+                if (userId) {
+                    const existingRating = ratings.find(r => r.user_id === parseInt(userId));
+                    setUserRating(existingRating || null);
+                    
+                    if (existingRating) {
+                        setRatingData({
+                            event_id: existingRating.event_id,
+                            skill_rating: existingRating.skill_rating,
+                            hospitality_rating: existingRating.hospitality_rating,
+                            review: existingRating.review || ''
+                        });
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('Error loading ratings:', error);
+        }
+    };
+
+    const loadPastEvents = async () => {
+        try {
+            const response = await fetch(`/api/communities/${communityId}/user-past-events`, {
+                headers: {
+                    'Authorization': `Bearer ${userToken}`,
+                    'Accept': 'application/json'
+                }
+            });
+
+            const data = await response.json();
+            if (data.status === 'success') {
+                setPastEvents(data.data.events || []);
+            }
+        } catch (error) {
+            console.error('Error loading past events:', error);
+        }
+    };
+
+    const submitRating = async () => {
+        if (!userMembership || userMembership.status !== 'active') {
+            setError('Hanya anggota aktif yang dapat memberikan rating');
+            return;
+        }
+
+        if (!ratingData.event_id) {
+            setError('Pilih event yang ingin Anda rating terlebih dahulu');
+            return;
+        }
+
+        setIsSubmittingRating(true);
+        setError('');
+
+        try {
+            const response = await fetch(`/api/communities/${communityId}/rate`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${userToken}`,
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
+                body: JSON.stringify(ratingData)
+            });
+
+            const data = await response.json();
+            if (data.status === 'success') {
+                // Reload ratings, community details, and past events
+                await loadRatings();
+                await loadCommunityDetails();
+                await loadPastEvents();
+                setShowRatingForm(false);
+                setSelectedEvent(null);
+                setError('');
+            } else {
+                setError(data.message || 'Gagal memberikan rating');
+            }
+        } catch (error) {
+            console.error('Error submitting rating:', error);
+            setError('Terjadi kesalahan saat memberikan rating');
+        } finally {
+            setIsSubmittingRating(false);
+        }
+    };
+
+    const handleRatingChange = (type, value) => {
+        setRatingData(prev => ({
+            ...prev,
+            [type]: value
+        }));
+    };
+
+    const handleEventSelection = (event) => {
+        setSelectedEvent(event);
+        setRatingData(prev => ({
+            ...prev,
+            event_id: event.id
+        }));
+        setShowRatingForm(true);
+    };
+
+    const cancelRating = () => {
+        setShowRatingForm(false);
+        setSelectedEvent(null);
+        setRatingData({
+            event_id: null,
+            skill_rating: 5,
+            hospitality_rating: 5,
+            review: ''
+        });
+        setError('');
     };
 
     const getMembershipStatus = () => {
@@ -306,6 +446,18 @@ const CommunityDetailPage = ({ communityId, userToken, onNavigate, onBack }) => 
                                 {community.membership_fee ? `Rp ${community.membership_fee.toLocaleString()}/bulan` : 'Gratis'}
                             </p>
                         </div>
+                        <div>
+                            <span className="text-xs font-medium text-gray-500">Rating Skill</span>
+                            <p className="font-medium text-gray-900">
+                                ⭐ {community.average_skill_rating ? parseFloat(community.average_skill_rating).toFixed(1) : 'N/A'}
+                            </p>
+                        </div>
+                        <div>
+                            <span className="text-xs font-medium text-gray-500">Rating Hospitality</span>
+                            <p className="font-medium text-gray-900">
+                                ❤️ {community.hospitality_rating ? parseFloat(community.hospitality_rating).toFixed(1) : 'N/A'}
+                            </p>
+                        </div>
                     </div>
 
                     {/* Action Buttons */}
@@ -335,6 +487,265 @@ const CommunityDetailPage = ({ communityId, userToken, onNavigate, onBack }) => 
                             💬 Chat
                         </button>
                     </div>
+                </div>
+
+                {/* Community Ratings Section */}
+                <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-4">
+                    <div className="flex items-center justify-between mb-4">
+                        <h2 className="text-lg font-semibold text-gray-900">
+                            Rating Komunitas ({ratings.length})
+                        </h2>
+                        
+                        {userMembership && userMembership.status === 'active' && (
+                            <button
+                                onClick={() => setShowRatingForm(!showRatingForm)}
+                                className="px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary-dark transition-colors"
+                            >
+                                {userRating ? '✏️ Edit Rating' : '⭐ Beri Rating'}
+                            </button>
+                        )}
+                    </div>
+
+                    {/* Community Ratings Display */}
+                    {ratings && ratings.length > 0 && (
+                        <div className="bg-white rounded-lg shadow-md p-6">
+                            <h3 className="text-lg font-bold text-gray-800 mb-4">
+                                💬 Rating & Review Komunitas
+                            </h3>
+                            <div className="space-y-4">
+                                {ratings.slice(0, 5).map((rating, index) => (
+                                    <div key={index} className="border-b border-gray-200 pb-4 last:border-b-0">
+                                        <div className="flex items-start justify-between">
+                                            <div className="flex items-center space-x-3">
+                                                <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center text-white font-bold">
+                                                    {rating.user?.name?.charAt(0).toUpperCase() || '?'}
+                                                </div>
+                                                <div>
+                                                    <h4 className="font-medium text-gray-900">
+                                                        {rating.user?.name || 'User'}
+                                                    </h4>
+                                                    <p className="text-xs text-gray-500">
+                                                        Event: {rating.event?.title || 'Event tidak ditemukan'}
+                                                    </p>
+                                                    <p className="text-xs text-gray-400">
+                                                        {new Date(rating.created_at).toLocaleDateString('id-ID', {
+                                                            day: 'numeric',
+                                                            month: 'short',
+                                                            year: 'numeric'
+                                                        })}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            <div className="text-right">
+                                                <div className="flex items-center space-x-2 text-sm">
+                                                    <span className="text-yellow-500">⭐ {rating.skill_rating}</span>
+                                                    <span className="text-red-500">❤️ {rating.hospitality_rating}</span>
+                                                </div>
+                                                <p className="text-xs text-gray-500">
+                                                    Avg: {((rating.skill_rating + rating.hospitality_rating) / 2).toFixed(1)}
+                                                </p>
+                                            </div>
+                                        </div>
+                                        {rating.review && (
+                                            <div className="mt-3 ml-13">
+                                                <p className="text-gray-700 text-sm bg-gray-50 p-3 rounded-lg">
+                                                    "{rating.review}"
+                                                </p>
+                                            </div>
+                                        )}
+                                    </div>
+                                ))}
+                                {ratings.length > 5 && (
+                                    <div className="text-center pt-4">
+                                        <p className="text-sm text-gray-500">
+                                            Dan {ratings.length - 5} rating lainnya...
+                                        </p>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Rating System */}
+                    {userMembership && userMembership.status === 'active' && (
+                        <div className="bg-white rounded-lg shadow-md p-6">
+                            <div className="flex items-center justify-between mb-4">
+                                <h3 className="text-lg font-bold text-gray-800">
+                                    📊 Rating Komunitas
+                                </h3>
+                                {pastEvents.length > 0 && !showRatingForm && (
+                                    <button
+                                        onClick={() => setShowRatingForm(true)}
+                                        className="px-4 py-2 bg-blue-500 text-white rounded-lg font-medium hover:bg-blue-600 transition-colors"
+                                    >
+                                        Beri Rating
+                                    </button>
+                                )}
+                            </div>
+
+                            {pastEvents.length === 0 && (
+                                <div className="text-center py-4 text-gray-500">
+                                    <p>Anda belum pernah mengikuti event di komunitas ini.</p>
+                                    <p className="text-sm">Ikuti event terlebih dahulu untuk dapat memberikan rating.</p>
+                                </div>
+                            )}
+
+                            {/* Event Selection */}
+                            {showRatingForm && !selectedEvent && pastEvents.length > 0 && (
+                                <div className="space-y-4">
+                                    <div className="border-b pb-4">
+                                        <h4 className="text-md font-semibold text-gray-700 mb-3">
+                                            Pilih Event yang Ingin Anda Rating:
+                                        </h4>
+                                        <div className="space-y-2">
+                                            {pastEvents.map(event => (
+                                                <div
+                                                    key={event.id}
+                                                    onClick={() => handleEventSelection(event)}
+                                                    className="p-3 border border-gray-200 rounded-lg cursor-pointer hover:bg-blue-50 hover:border-blue-300 transition-colors"
+                                                >
+                                                    <div className="flex justify-between items-start">
+                                                        <div>
+                                                            <h5 className="font-medium text-gray-800">{event.title}</h5>
+                                                            <p className="text-sm text-gray-600">{event.sport?.name}</p>
+                                                            <p className="text-xs text-gray-500">
+                                                                {new Date(event.event_date).toLocaleDateString('id-ID', {
+                                                                    weekday: 'long',
+                                                                    year: 'numeric',
+                                                                    month: 'long',
+                                                                    day: 'numeric'
+                                                                })}
+                                                            </p>
+                                                        </div>
+                                                        <span className="text-blue-500 text-sm">
+                                                            Pilih →
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                    <div className="flex justify-end">
+                                        <button
+                                            onClick={cancelRating}
+                                            className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg font-medium hover:bg-gray-300 transition-colors"
+                                        >
+                                            Batal
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Rating Form */}
+                            {showRatingForm && selectedEvent && (
+                                <div className="space-y-4">
+                                    <div className="border-b pb-4">
+                                        <h4 className="text-md font-semibold text-gray-700 mb-2">
+                                            Rating untuk Event: {selectedEvent.title}
+                                        </h4>
+                                        <p className="text-sm text-gray-600">
+                                            {selectedEvent.sport?.name} • {new Date(selectedEvent.event_date).toLocaleDateString('id-ID')}
+                                        </p>
+                                    </div>
+
+                                    {error && (
+                                        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
+                                            {error}
+                                        </div>
+                                    )}
+
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        {/* Skill Rating */}
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                ⭐ Skill Level Komunitas (1-5):
+                                            </label>
+                                            <div className="flex space-x-2">
+                                                {[1, 2, 3, 4, 5].map(star => (
+                                                    <button
+                                                        key={star}
+                                                        type="button"
+                                                        onClick={() => handleRatingChange('skill_rating', star)}
+                                                        className={`text-2xl transition-colors ${
+                                                            star <= ratingData.skill_rating 
+                                                                ? 'text-yellow-400' 
+                                                                : 'text-gray-300'
+                                                        }`}
+                                                    >
+                                                        ⭐
+                                                    </button>
+                                                ))}
+                                            </div>
+                                            <p className="text-xs text-gray-500 mt-1">
+                                                Rating: {ratingData.skill_rating}/5
+                                            </p>
+                                        </div>
+
+                                        {/* Hospitality Rating */}
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                ❤️ Hospitalitas Komunitas (1-5):
+                                            </label>
+                                            <div className="flex space-x-2">
+                                                {[1, 2, 3, 4, 5].map(heart => (
+                                                    <button
+                                                        key={heart}
+                                                        type="button"
+                                                        onClick={() => handleRatingChange('hospitality_rating', heart)}
+                                                        className={`text-2xl transition-colors ${
+                                                            heart <= ratingData.hospitality_rating 
+                                                                ? 'text-red-500' 
+                                                                : 'text-gray-300'
+                                                        }`}
+                                                    >
+                                                        ❤️
+                                                    </button>
+                                                ))}
+                                            </div>
+                                            <p className="text-xs text-gray-500 mt-1">
+                                                Rating: {ratingData.hospitality_rating}/5
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    {/* Review */}
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                                            💬 Review (Opsional):
+                                        </label>
+                                        <textarea
+                                            value={ratingData.review}
+                                            onChange={(e) => handleRatingChange('review', e.target.value)}
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                                            rows="3"
+                                            maxLength="500"
+                                            placeholder="Ceritakan pengalaman Anda di komunitas ini..."
+                                        />
+                                        <p className="text-xs text-gray-500 mt-1">
+                                            {ratingData.review.length}/500 karakter
+                                        </p>
+                                    </div>
+
+                                    {/* Submit Buttons */}
+                                    <div className="flex space-x-3 pt-4">
+                                        <button
+                                            onClick={submitRating}
+                                            disabled={isSubmittingRating}
+                                            className="flex-1 px-4 py-3 bg-blue-500 text-white rounded-lg font-semibold hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                        >
+                                            {isSubmittingRating ? 'Menyimpan...' : (userRating ? 'Update Rating' : 'Kirim Rating')}
+                                        </button>
+                                        <button
+                                            onClick={cancelRating}
+                                            className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg font-medium hover:bg-gray-300 transition-colors"
+                                        >
+                                            Batal
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
                 </div>
 
                 {/* Members Section */}

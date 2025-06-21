@@ -8,6 +8,8 @@ use App\Models\EventParticipant;
 use App\Models\User;
 use App\Models\UserSportRating;
 use App\Models\MatchHistory;
+use App\Services\MatchmakingService;
+use App\Services\CourtManagementService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
@@ -16,10 +18,14 @@ use Illuminate\Support\Facades\DB;
 class MatchmakingController extends Controller
 {
     protected $matchmakingService;
+    protected $courtManagementService;
 
-    public function __construct(MatchmakingService $matchmakingService)
-    {
+    public function __construct(
+        MatchmakingService $matchmakingService,
+        CourtManagementService $courtManagementService
+    ) {
         $this->matchmakingService = $matchmakingService;
+        $this->courtManagementService = $courtManagementService;
     }
     /**
      * Get fair matchmaking pairs for an event
@@ -479,6 +485,325 @@ class MatchmakingController extends Controller
             return response()->json([
                 'status' => 'error',
                 'message' => 'Terjadi kesalahan saat membuat fair matchmaking.',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Get event-specific matchmaking status for participants
+     */
+    public function getEventMatchmakingStatus(Request $request, $eventId)
+    {
+        try {
+            $event = Event::with(['sport', 'participants.user'])->findOrFail($eventId);
+            $user = Auth::user();
+
+            // Check if user is participant or host
+            $isParticipant = $event->participants()
+                ->where('user_id', $user->id)
+                ->whereIn('status', ['confirmed', 'checked_in'])
+                ->exists();
+            
+            $isHost = $event->host_id === $user->id;
+
+            if (!$isParticipant && !$isHost && !$user->hasRole('admin')) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Anda tidak memiliki akses untuk melihat status matchmaking event ini.'
+                ], 403);
+            }
+
+            // Get matches for this event
+            $ongoingMatches = MatchHistory::with(['event.sport', 'player1.profile', 'player2.profile'])
+                ->where('event_id', $eventId)
+                ->where('match_status', 'ongoing')
+                ->orderBy('created_at', 'desc')
+                ->get();
+
+            $scheduledMatches = MatchHistory::with(['event.sport', 'player1.profile', 'player2.profile'])
+                ->where('event_id', $eventId)
+                ->where('match_status', 'scheduled')
+                ->orderBy('court_number', 'asc')
+                ->get();
+
+            $completedMatches = MatchHistory::with(['event.sport', 'player1.profile', 'player2.profile'])
+                ->where('event_id', $eventId)
+                ->where('match_status', 'completed')
+                ->orderBy('created_at', 'desc')
+                ->take(10)
+                ->get();
+
+            // Get event participants status
+            $participants = $event->participants()
+                ->with(['user.profile'])
+                ->whereIn('status', ['confirmed', 'checked_in'])
+                ->get();
+
+            // Check who's playing and who's waiting
+            $playingUserIds = collect()
+                ->merge($ongoingMatches->pluck('player1_id'))
+                ->merge($ongoingMatches->pluck('player2_id'))
+                ->merge($scheduledMatches->pluck('player1_id'))
+                ->merge($scheduledMatches->pluck('player2_id'))
+                ->unique()
+                ->values()
+                ->toArray();
+
+            $waitingParticipants = $participants->filter(function($participant) use ($playingUserIds) {
+                return !in_array($participant->user_id, $playingUserIds);
+            });
+
+            return response()->json([
+                'status' => 'success',
+                'data' => [
+                    'event' => [
+                        'id' => $event->id,
+                        'title' => $event->title,
+                        'sport' => $event->sport,
+                        'date' => $event->event_date,
+                        'location' => $event->location_name
+                    ],
+                    'ongoing_matches' => $ongoingMatches,
+                    'scheduled_matches' => $scheduledMatches,
+                    'completed_matches' => $completedMatches,
+                    'waiting_queue' => $waitingParticipants->map(function($participant) {
+                        return [
+                            'user_id' => $participant->user_id,
+                            'name' => $participant->user->name,
+                            'profile_picture' => $participant->user->profile->profile_picture ?? null,
+                            'waiting_since' => $participant->confirmed_at ?? $participant->created_at
+                        ];
+                    }),
+                    'summary' => [
+                        'ongoing_count' => $ongoingMatches->count(),
+                        'scheduled_count' => $scheduledMatches->count(),
+                        'completed_count' => $completedMatches->count(),
+                        'waiting_count' => $waitingParticipants->count(),
+                        'total_participants' => $participants->count()
+                    ],
+                    'permissions' => [
+                        'is_host' => $isHost,
+                        'is_participant' => $isParticipant,
+                        'can_manage' => $isHost || $user->hasRole('admin')
+                    ]
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Terjadi kesalahan saat mengambil status matchmaking.',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Get court status and queue information for an event
+     */
+    public function getCourtStatus(Request $request, $eventId)
+    {
+        try {
+            $event = Event::findOrFail($eventId);
+            $user = Auth::user();
+
+            // Host or admin can view court status
+            if ($event->host_id !== $user->id && !$user->hasRole('admin')) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Hanya host yang dapat melihat status court.'
+                ], 403);
+            }
+
+            $courtStatus = $this->courtManagementService->getCourtStatus($event);
+
+            return response()->json([
+                'status' => 'success',
+                'data' => [
+                    'event_id' => $event->id,
+                    'event_title' => $event->title,
+                    'court_status' => $courtStatus
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Terjadi kesalahan saat mengambil status court.',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Assign players to a specific court
+     */
+    public function assignCourt(Request $request, $eventId)
+    {
+        try {
+            $validator = Validator::make($request->all(), [
+                'court_number' => 'required|integer|min:1|max:20',
+                'player1_id' => 'required|exists:users,id',
+                'player2_id' => 'required|exists:users,id|different:player1_id',
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Validation failed',
+                    'errors' => $validator->errors()
+                ], 422);
+            }
+
+            $event = Event::findOrFail($eventId);
+            $user = Auth::user();
+
+            // Only host can assign courts
+            if ($event->host_id !== $user->id && !$user->hasRole('admin')) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Hanya host yang dapat mengatur court.'
+                ], 403);
+            }
+
+            $result = $this->courtManagementService->assignCourt(
+                $event,
+                $request->court_number,
+                $request->player1_id,
+                $request->player2_id,
+                $user->id
+            );
+
+            return response()->json([
+                'status' => $result['success'] ? 'success' : 'error',
+                'message' => $result['message'],
+                'data' => $result['success'] ? ['match' => $result['match']] : null
+            ], $result['success'] ? 200 : 422);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Terjadi kesalahan saat mengatur court.',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Override/switch free players
+     */
+    public function overridePlayer(Request $request, $eventId)
+    {
+        try {
+            $validator = Validator::make($request->all(), [
+                'match_id' => 'required|exists:match_history,id',
+                'old_player_id' => 'required|exists:users,id',
+                'new_player_id' => 'required|exists:users,id|different:old_player_id',
+                'reason' => 'nullable|string|max:255',
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Validation failed',
+                    'errors' => $validator->errors()
+                ], 422);
+            }
+
+            $event = Event::findOrFail($eventId);
+            $user = Auth::user();
+
+            $result = $this->courtManagementService->overridePlayer(
+                $event,
+                $request->match_id,
+                $request->old_player_id,
+                $request->new_player_id,
+                $user->id,
+                $request->reason
+            );
+
+            return response()->json([
+                'status' => $result['success'] ? 'success' : 'error',
+                'message' => $result['message'],
+                'data' => $result['success'] ? ['match' => $result['match']] : null
+            ], $result['success'] ? 200 : 422);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Terjadi kesalahan saat mengganti player.',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Start a match
+     */
+    public function startMatch(Request $request, $eventId, $matchId)
+    {
+        try {
+            $event = Event::findOrFail($eventId);
+            $user = Auth::user();
+
+            // Only host can start matches
+            if ($event->host_id !== $user->id && !$user->hasRole('admin')) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Hanya host yang dapat memulai match.'
+                ], 403);
+            }
+
+            $result = $this->courtManagementService->startMatch($matchId, $user->id);
+
+            return response()->json([
+                'status' => $result['success'] ? 'success' : 'error',
+                'message' => $result['message'],
+                'data' => $result['success'] ? ['match' => $result['match']] : null
+            ], $result['success'] ? 200 : 422);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Terjadi kesalahan saat memulai match.',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Get next round suggestions
+     */
+    public function getNextRoundSuggestions(Request $request, $eventId)
+    {
+        try {
+            $event = Event::findOrFail($eventId);
+            $user = Auth::user();
+
+            // Only host can get suggestions
+            if ($event->host_id !== $user->id && !$user->hasRole('admin')) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Hanya host yang dapat melihat suggestions.'
+                ], 403);
+            }
+
+            $suggestions = $this->courtManagementService->getNextRoundSuggestions($event);
+
+            return response()->json([
+                'status' => 'success',
+                'data' => [
+                    'event_id' => $event->id,
+                    'suggestions' => $suggestions['suggestions'],
+                    'message' => $suggestions['message']
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Terjadi kesalahan saat mengambil suggestions.',
                 'error' => $e->getMessage()
             ], 500);
         }

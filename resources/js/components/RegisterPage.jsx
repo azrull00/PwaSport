@@ -21,6 +21,8 @@ const RegisterPage = ({ onNavigate, userType, onLoginSuccess }) => {
     const [errors, setErrors] = useState({});
     const [isLoading, setIsLoading] = useState(false);
     const [currentStep, setCurrentStep] = useState(1);
+    const [acceptedTerms, setAcceptedTerms] = useState(false);
+    const [showTermsModal, setShowTermsModal] = useState(false);
     const totalSteps = 3;
 
     const handleInputChange = (e) => {
@@ -91,6 +93,9 @@ const RegisterPage = ({ onNavigate, userType, onLoginSuccess }) => {
             }
             if (!formData.province.trim()) {
                 newErrors.province = 'Provinsi harus diisi';
+            }
+            if (!acceptedTerms) {
+                newErrors.terms = 'Anda harus menyetujui Syarat & Ketentuan';
             }
         }
         
@@ -421,6 +426,46 @@ const RegisterPage = ({ onNavigate, userType, onLoginSuccess }) => {
                 )}
             </div>
 
+            {/* Terms & Conditions */}
+            <div className="mt-6">
+                <div className="flex items-start space-x-3">
+                    <input
+                        type="checkbox"
+                        id="acceptTerms"
+                        checked={acceptedTerms}
+                        onChange={(e) => {
+                            setAcceptedTerms(e.target.checked);
+                            if (errors.terms) {
+                                setErrors(prev => ({ ...prev, terms: '' }));
+                            }
+                        }}
+                        className="mt-1 w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary focus:ring-2"
+                    />
+                    <label htmlFor="acceptTerms" className="text-sm text-gray-700 leading-relaxed">
+                        Saya menyetujui{' '}
+                        <button
+                            type="button"
+                            onClick={() => setShowTermsModal(true)}
+                            className="text-primary hover:text-primary-dark font-medium underline"
+                        >
+                            Syarat & Ketentuan
+                        </button>
+                        {' '}dan{' '}
+                        <button
+                            type="button"
+                            onClick={() => setShowTermsModal(true)}
+                            className="text-primary hover:text-primary-dark font-medium underline"
+                        >
+                            Kebijakan Privasi
+                        </button>
+                        {' '}SportPWA
+                    </label>
+                </div>
+                {errors.terms && (
+                    <p className="text-red-500 text-xs mt-1 ml-7">{errors.terms}</p>
+                )}
+            </div>
+
             {/* User Type Benefits */}
             <div className="bg-primary/5 border border-primary/20 rounded-lg p-4 mt-6">
                 <h4 className="font-semibold text-primary mb-2">Keuntungan sebagai {userTypeInfo.title}:</h4>
@@ -566,6 +611,105 @@ const RegisterPage = ({ onNavigate, userType, onLoginSuccess }) => {
                     <span className="text-primary">Kebijakan Privasi</span> kami
                 </p>
             </div>
+
+            {/* Terms & Conditions Modal */}
+            {showTermsModal && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+                    <div className="bg-white rounded-xl max-w-md w-full max-h-[80vh] flex flex-col">
+                        {/* Modal Header */}
+                        <div className="flex items-center justify-between p-6 border-b border-gray-200">
+                            <h3 className="text-lg font-semibold text-gray-900">Syarat & Ketentuan</h3>
+                            <button
+                                onClick={() => setShowTermsModal(false)}
+                                className="text-gray-400 hover:text-gray-600 transition-colors"
+                            >
+                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </button>
+                        </div>
+
+                        {/* Modal Content */}
+                        <div className="flex-1 overflow-y-auto p-6">
+                            <div className="space-y-4 text-sm text-gray-700">
+                                <div>
+                                    <h4 className="font-semibold text-gray-900 mb-2">1. Penerimaan Ketentuan</h4>
+                                    <p>Dengan menggunakan aplikasi SportPWA, Anda menyetujui untuk terikat oleh syarat dan ketentuan ini.</p>
+                                </div>
+
+                                <div>
+                                    <h4 className="font-semibold text-gray-900 mb-2">2. Penggunaan Layanan</h4>
+                                    <p>Anda setuju untuk menggunakan layanan kami dengan cara yang bertanggung jawab dan sesuai dengan hukum yang berlaku.</p>
+                                </div>
+
+                                <div>
+                                    <h4 className="font-semibold text-gray-900 mb-2">3. Akun Pengguna</h4>
+                                    <p>Anda bertanggung jawab untuk menjaga keamanan akun dan password Anda. Segera laporkan jika ada penggunaan tidak sah.</p>
+                                </div>
+
+                                <div>
+                                    <h4 className="font-semibold text-gray-900 mb-2">4. Konten Pengguna</h4>
+                                    <p>Anda memiliki tanggung jawab penuh atas konten yang Anda bagikan di platform kami.</p>
+                                </div>
+
+                                <div>
+                                    <h4 className="font-semibold text-gray-900 mb-2">5. Kebijakan Privasi</h4>
+                                    <p>Kami menghormati privasi Anda dan berkomitmen untuk melindungi data pribadi Anda sesuai dengan kebijakan privasi kami.</p>
+                                </div>
+
+                                <div>
+                                    <h4 className="font-semibold text-gray-900 mb-2">6. Pembatasan Tanggung Jawab</h4>
+                                    <p>SportPWA tidak bertanggung jawab atas kerugian yang timbul dari penggunaan layanan kami.</p>
+                                </div>
+
+                                <div>
+                                    <h4 className="font-semibold text-gray-900 mb-2">7. Perubahan Ketentuan</h4>
+                                    <p>Kami berhak mengubah syarat dan ketentuan ini sewaktu-waktu. Perubahan akan dinotifikasi kepada pengguna.</p>
+                                </div>
+
+                                <div>
+                                    <h4 className="font-semibold text-gray-900 mb-2">8. Penghentian Layanan</h4>
+                                    <p>Kami berhak menghentikan atau membatasi akses Anda jika melanggar ketentuan yang berlaku.</p>
+                                </div>
+
+                                <div>
+                                    <h4 className="font-semibold text-gray-900 mb-2">9. Hukum yang Berlaku</h4>
+                                    <p>Syarat dan ketentuan ini diatur oleh hukum Republik Indonesia.</p>
+                                </div>
+
+                                <div>
+                                    <h4 className="font-semibold text-gray-900 mb-2">10. Kontak</h4>
+                                    <p>Jika Anda memiliki pertanyaan tentang syarat dan ketentuan ini, silakan hubungi kami di support@sportpwa.com</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Modal Footer */}
+                        <div className="p-6 border-t border-gray-200">
+                            <div className="flex space-x-3">
+                                <button
+                                    onClick={() => setShowTermsModal(false)}
+                                    className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
+                                >
+                                    Tutup
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        setAcceptedTerms(true);
+                                        setShowTermsModal(false);
+                                        if (errors.terms) {
+                                            setErrors(prev => ({ ...prev, terms: '' }));
+                                        }
+                                    }}
+                                    className="flex-1 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary-dark transition-colors"
+                                >
+                                    Setuju & Tutup
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

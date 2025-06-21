@@ -11,6 +11,8 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
+use App\Models\Event;
+use App\Models\EventParticipant;
 
 class CommunityController extends Controller
 {
@@ -292,15 +294,43 @@ class CommunityController extends Controller
 
             // Validate request
             $request->validate([
+                'event_id' => 'required|exists:events,id',
                 'skill_rating' => 'required|numeric|min:1|max:5',
                 'hospitality_rating' => 'required|numeric|min:1|max:5',
                 'review' => 'nullable|string|max:500',
             ]);
 
-            // Check if user already rated this community
+            // Verify user participated in the event
+            $eventParticipation = EventParticipant::where([
+                'event_id' => $request->event_id,
+                'user_id' => $user->id,
+                'status' => 'checked_in' // User must have checked in to rate
+            ])->first();
+
+            if (!$eventParticipation) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Anda hanya dapat memberikan rating setelah mengikuti event komunitas.'
+                ], 403);
+            }
+
+            // Verify the event belongs to this community
+            $event = Event::where('id', $request->event_id)
+                          ->where('community_id', $community->id)
+                          ->first();
+
+            if (!$event) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Event tidak ditemukan atau tidak terkait dengan komunitas ini.'
+                ], 404);
+            }
+
+            // Check if user already rated this community for this event
             $existingRating = CommunityRating::where([
                 'community_id' => $community->id,
-                'user_id' => $user->id
+                'user_id' => $user->id,
+                'event_id' => $request->event_id
             ])->first();
 
             if ($existingRating) {
@@ -316,6 +346,7 @@ class CommunityController extends Controller
                 $rating = CommunityRating::create([
                     'community_id' => $community->id,
                     'user_id' => $user->id,
+                    'event_id' => $request->event_id,
                     'skill_rating' => $request->skill_rating,
                     'hospitality_rating' => $request->hospitality_rating,
                     'review' => $request->review,
@@ -348,7 +379,7 @@ class CommunityController extends Controller
     public function getRatings(Community $community)
     {
         try {
-            $ratings = CommunityRating::with(['user.profile'])
+            $ratings = CommunityRating::with(['user.profile', 'event'])
                 ->where('community_id', $community->id)
                 ->orderBy('created_at', 'desc')
                 ->paginate(10);
@@ -364,6 +395,44 @@ class CommunityController extends Controller
             return response()->json([
                 'status' => 'error',
                 'message' => 'Terjadi kesalahan saat mengambil rating komunitas.',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Get user's past events in community (for rating)
+     */
+    public function getUserPastEvents(Community $community)
+    {
+        try {
+            $user = Auth::user();
+
+            // Get events where user participated and checked in, but haven't rated yet
+            $pastEvents = Event::where('community_id', $community->id)
+                ->where('status', 'completed')
+                ->whereHas('participants', function($query) use ($user) {
+                    $query->where('user_id', $user->id)
+                          ->where('status', 'checked_in');
+                })
+                ->whereDoesntHave('communityRatings', function($query) use ($user) {
+                    $query->where('user_id', $user->id);
+                })
+                ->with(['sport'])
+                ->orderBy('event_date', 'desc')
+                ->get();
+
+            return response()->json([
+                'status' => 'success',
+                'data' => [
+                    'events' => $pastEvents
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Terjadi kesalahan saat mengambil event.',
                 'error' => $e->getMessage()
             ], 500);
         }

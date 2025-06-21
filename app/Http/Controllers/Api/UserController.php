@@ -939,4 +939,81 @@ class UserController extends Controller
             ], 500);
         }
     }
+
+    /**
+     * Get public user profile
+     */
+    public function getPublicProfile(Request $request, $userId)
+    {
+        try {
+            $user = User::with(['profile'])
+                ->findOrFail($userId);
+
+            // Get match statistics
+            $totalMatches = \App\Models\MatchHistory::where(function($q) use ($user) {
+                $q->where('player1_id', $user->id)
+                  ->orWhere('player2_id', $user->id);
+            })->whereNotNull('result')->count();
+
+            $wins = \App\Models\MatchHistory::where(function($q) use ($user) {
+                $q->where('player1_id', $user->id)->where('result', 'player1_win')
+                  ->orWhere('player2_id', $user->id)->where('result', 'player2_win');
+            })->count();
+
+            $winRate = $totalMatches > 0 ? round(($wins / $totalMatches) * 100, 1) : 0;
+
+            // Get user statistics
+            $stats = [
+                'events_joined' => $user->participatedEvents()->count(),
+                'matches_played' => $totalMatches,
+                'communities_joined' => $user->communityMemberships()->count(),
+                'win_rate' => $winRate,
+                'total_wins' => $wins,
+            ];
+
+            // Add stats to user object
+            $user->stats = $stats;
+
+            return response()->json([
+                'status' => 'success',
+                'data' => [
+                    'user' => $user
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            \Log::error('Error in getPublicProfile: ' . $e->getMessage(), [
+                'user_id' => $userId,
+                'trace' => $e->getTraceAsString()
+            ]);
+            
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Terjadi kesalahan saat mengambil profil user.',
+                'error' => config('app.debug') ? $e->getMessage() : 'User tidak ditemukan'
+            ], 404);
+        }
+    }
+
+    /**
+     * Calculate user win rate
+     */
+    private function calculateWinRate($user)
+    {
+        $totalMatches = \App\Models\MatchHistory::where(function($q) use ($user) {
+            $q->where('player1_id', $user->id)
+              ->orWhere('player2_id', $user->id);
+        })->whereNotNull('result')->count();
+
+        if ($totalMatches === 0) {
+            return 0;
+        }
+
+        $wins = \App\Models\MatchHistory::where(function($q) use ($user) {
+            $q->where('player1_id', $user->id)->where('result', 'player1_win')
+              ->orWhere('player2_id', $user->id)->where('result', 'player2_win');
+        })->count();
+
+        return round(($wins / $totalMatches) * 100, 1);
+    }
 }

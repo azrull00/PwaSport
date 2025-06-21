@@ -47,20 +47,34 @@ class NotificationController extends Controller
             // Pagination
             $perPage = $request->get('per_page', 20);
             $notifications = $query->paginate($perPage);
+            
+            // Get unread count
+            $unreadCount = Notification::where('user_id', $user->id)
+                ->whereNull('read_at')
+                ->count();
 
             return response()->json([
                 'status' => 'success',
                 'data' => [
-                    'notifications' => $notifications,
-                    'unread_count' => $user->unreadNotifications()->count()
+                    'notifications' => $notifications->items(),
+                    'unread_count' => $unreadCount,
+                    'total' => $notifications->total(),
+                    'per_page' => $notifications->perPage(),
+                    'current_page' => $notifications->currentPage(),
+                    'total_pages' => $notifications->lastPage(),
                 ]
             ]);
 
         } catch (\Exception $e) {
+            \Log::error('Error in NotificationController index: ' . $e->getMessage(), [
+                'user_id' => Auth::id(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            
             return response()->json([
                 'status' => 'error',
                 'message' => 'Terjadi kesalahan saat mengambil notifikasi.',
-                'error' => $e->getMessage()
+                'error' => config('app.debug') ? $e->getMessage() : 'Internal server error'
             ], 500);
         }
     }

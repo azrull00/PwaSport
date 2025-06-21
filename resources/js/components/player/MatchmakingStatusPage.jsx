@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
+import { HiArrowLeft } from 'react-icons/hi';
 
-const MatchmakingStatusPage = ({ userToken, onNavigate, onBack }) => {
+const MatchmakingStatusPage = ({ userToken, onNavigate, onBack, eventId = null }) => {
     const [matchmakingData, setMatchmakingData] = useState({
         ongoing_matches: [],
         scheduled_matches: [],
@@ -12,12 +13,19 @@ const MatchmakingStatusPage = ({ userToken, onNavigate, onBack }) => {
 
     useEffect(() => {
         fetchMatchmakingStatus();
-    }, [userToken]);
+    }, [userToken, eventId]);
 
     const fetchMatchmakingStatus = async () => {
         try {
             setLoading(true);
-            const response = await fetch('/api/users/my-matchmaking-status', {
+            
+            // If eventId is provided, fetch specific event matchmaking status
+            let url = '/api/users/my-matchmaking-status';
+            if (eventId) {
+                url = `/api/matchmaking/${eventId}/event-matchmaking-status`;
+            }
+            
+            const response = await fetch(url, {
                 headers: {
                     'Authorization': `Bearer ${userToken}`,
                     'Content-Type': 'application/json',
@@ -95,11 +103,11 @@ const MatchmakingStatusPage = ({ userToken, onNavigate, onBack }) => {
                         onClick={onBack}
                         className="mr-3 p-2 hover:bg-gray-100 rounded-full transition-colors"
                     >
-                        <svg className="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                        </svg>
+                        <HiArrowLeft className="w-6 h-6 text-gray-600" />
                     </button>
-                    <h1 className="text-xl font-semibold text-gray-900">Status Matchmaking</h1>
+                    <h1 className="text-xl font-semibold text-gray-900">
+                        {eventId ? `Status Matchmaking - ${matchmakingData.event?.title || 'Event'}` : 'Status Matchmaking'}
+                    </h1>
                 </div>
             </div>
 
@@ -115,10 +123,61 @@ const MatchmakingStatusPage = ({ userToken, onNavigate, onBack }) => {
                         <div className="text-sm text-gray-600">Terjadwal</div>
                     </div>
                     <div className="bg-white rounded-lg p-4 text-center shadow-sm">
-                        <div className="text-2xl font-bold text-green-600">{matchmakingData.summary.upcoming_events_count || 0}</div>
-                        <div className="text-sm text-gray-600">Event Mendatang</div>
+                        <div className="text-2xl font-bold text-green-600">
+                            {eventId ? 
+                                (matchmakingData.summary.waiting_count || 0) : 
+                                (matchmakingData.summary.upcoming_events_count || 0)
+                            }
+                        </div>
+                        <div className="text-sm text-gray-600">
+                            {eventId ? 'Dalam Antrian' : 'Event Mendatang'}
+                        </div>
                     </div>
                 </div>
+
+                {/* Event-specific info */}
+                {eventId && matchmakingData.event && (
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+                        <h3 className="font-semibold text-blue-900 mb-2">Info Event</h3>
+                        <div className="space-y-1 text-sm text-blue-800">
+                            <p><span className="font-medium">Sport:</span> {matchmakingData.event.sport?.name}</p>
+                            <p><span className="font-medium">Lokasi:</span> {matchmakingData.event.location}</p>
+                            <p><span className="font-medium">Tanggal:</span> {new Date(matchmakingData.event.date).toLocaleDateString('id-ID')}</p>
+                            {matchmakingData.summary.total_participants && (
+                                <p><span className="font-medium">Total Peserta:</span> {matchmakingData.summary.total_participants}</p>
+                            )}
+                        </div>
+                    </div>
+                )}
+
+                {/* Waiting Queue for specific event */}
+                {eventId && matchmakingData.waiting_queue && matchmakingData.waiting_queue.length > 0 && (
+                    <div className="mb-6">
+                        <h2 className="text-lg font-semibold text-gray-900 mb-3 flex items-center">
+                            <div className="w-3 h-3 bg-yellow-500 rounded-full mr-2"></div>
+                            Antrian Pemain ({matchmakingData.waiting_queue.length})
+                        </h2>
+                        <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+                            {matchmakingData.waiting_queue.map((player, index) => (
+                                <div key={player.user_id} className="flex items-center justify-between p-4 border-b border-gray-100 last:border-b-0">
+                                    <div className="flex items-center space-x-3">
+                                        <div className="w-8 h-8 bg-yellow-100 rounded-full flex items-center justify-center">
+                                            <span className="text-sm font-medium text-yellow-700">
+                                                {index + 1}
+                                            </span>
+                                        </div>
+                                        <div>
+                                            <p className="font-medium text-gray-900">{player.name}</p>
+                                            <p className="text-sm text-gray-500">
+                                                Menunggu sejak: {new Date(player.waiting_since).toLocaleTimeString('id-ID')}
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
 
                 {/* Ongoing Matches */}
                 {matchmakingData.ongoing_matches.length > 0 && (
@@ -189,8 +248,51 @@ const MatchmakingStatusPage = ({ userToken, onNavigate, onBack }) => {
                     </div>
                 )}
 
+                {/* Completed Matches for event-specific view */}
+                {eventId && matchmakingData.completed_matches && matchmakingData.completed_matches.length > 0 && (
+                    <div className="mb-6">
+                        <h2 className="text-lg font-semibold text-gray-900 mb-3 flex items-center">
+                            <div className="w-3 h-3 bg-gray-600 rounded-full mr-2"></div>
+                            Pertandingan Selesai
+                        </h2>
+                        {matchmakingData.completed_matches.map((match) => (
+                            <div key={match.id} className="bg-white rounded-lg p-4 mb-3 shadow-sm border border-gray-200">
+                                <div className="flex items-center justify-between mb-2">
+                                    <span className="text-sm font-medium text-gray-600">
+                                        {match.event.sport.name} • Court {match.court_number || 'N/A'}
+                                    </span>
+                                    <span className="bg-gray-100 text-gray-600 text-xs px-2 py-1 rounded-full">
+                                        SELESAI
+                                    </span>
+                                </div>
+                                <h3 className="font-semibold text-gray-900 mb-2">{match.event.title}</h3>
+                                <div className="flex justify-between items-center">
+                                    <div className="text-sm text-gray-600">
+                                        <div>{match.player1.name} vs {match.player2.name}</div>
+                                        <div className="text-xs text-gray-500 mt-1">
+                                            {formatDateTime(match.match_date)}
+                                        </div>
+                                    </div>
+                                    <div className="text-right">
+                                        {match.match_score && (
+                                            <div className="text-lg font-bold text-gray-700">
+                                                {match.match_score.player1_score || 0} - {match.match_score.player2_score || 0}
+                                            </div>
+                                        )}
+                                        <div className="text-xs text-gray-500 mt-1">
+                                            {match.result === 'player1_win' ? `${match.player1.name} Menang` :
+                                             match.result === 'player2_win' ? `${match.player2.name} Menang` :
+                                             match.result === 'draw' ? 'Seri' : 'Belum Ada Hasil'}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                )}
+
                 {/* Upcoming Events */}
-                {matchmakingData.upcoming_events.length > 0 && (
+                {!eventId && matchmakingData.upcoming_events && matchmakingData.upcoming_events.length > 0 && (
                     <div className="mb-6">
                         <h2 className="text-lg font-semibold text-gray-900 mb-3 flex items-center">
                             <div className="w-3 h-3 bg-green-600 rounded-full mr-2"></div>

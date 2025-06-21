@@ -1,9 +1,12 @@
 import React, { useState, useEffect } from 'react';
 
-const ProfilePage = ({ user, userToken, onLogout, onUserUpdate, onNavigate }) => {
+const ProfilePage = ({ user, userToken, onLogout, onUserUpdate, onNavigate, onStartPrivateChat }) => {
     const [isEditing, setIsEditing] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
-    const [activeTab, setActiveTab] = useState('profile'); // profile, stats, settings
+    const [activeTab, setActiveTab] = useState('profile'); // profile, stats, info
+    const [searchQuery, setSearchQuery] = useState('');
+    const [searchResults, setSearchResults] = useState([]);
+    const [isSearching, setIsSearching] = useState(false);
     const [formData, setFormData] = useState({
         first_name: '',
         last_name: '',
@@ -185,6 +188,79 @@ const ProfilePage = ({ user, userToken, onLogout, onUserUpdate, onNavigate }) =>
             setError('Terjadi kesalahan saat menghapus foto profil');
         } finally {
             setIsLoading(false);
+        }
+    };
+
+    // Search friends functionality
+    const searchUsers = async (query) => {
+        if (!query.trim()) {
+            setSearchResults([]);
+            return;
+        }
+
+        setIsSearching(true);
+        try {
+            const response = await fetch(`/api/friends/search?query=${encodeURIComponent(query)}`, {
+                headers: {
+                    'Authorization': `Bearer ${userToken}`,
+                    'Accept': 'application/json'
+                }
+            });
+
+            const data = await response.json();
+            
+            if (data.status === 'success') {
+                setSearchResults(data.data.users || []);
+            } else {
+                setSearchResults([]);
+            }
+        } catch (error) {
+            console.error('Error searching users:', error);
+            setSearchResults([]);
+        } finally {
+            setIsSearching(false);
+        }
+    };
+
+    const handleSearchChange = (e) => {
+        const query = e.target.value;
+        setSearchQuery(query);
+        
+        // Debounce search
+        clearTimeout(window.searchTimeout);
+        window.searchTimeout = setTimeout(() => {
+            searchUsers(query);
+        }, 500);
+    };
+
+    const sendFriendRequest = async (userId) => {
+        try {
+            const response = await fetch('/api/friends/request', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${userToken}`,
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
+                body: JSON.stringify({
+                    receiver_id: userId,
+                    message: 'Mari berteman!'
+                })
+            });
+
+            const data = await response.json();
+            
+            if (data.status === 'success') {
+                setSuccess('Permintaan pertemanan berhasil dikirim!');
+                // Update search results to reflect the change
+                searchUsers(searchQuery);
+                setTimeout(() => setSuccess(''), 3000);
+            } else {
+                setError(data.message || 'Gagal mengirim permintaan pertemanan');
+            }
+        } catch (error) {
+            console.error('Error sending friend request:', error);
+            setError('Terjadi kesalahan saat mengirim permintaan pertemanan');
         }
     };
 
@@ -434,6 +510,90 @@ const ProfilePage = ({ user, userToken, onLogout, onUserUpdate, onNavigate }) =>
                 </div>
             </div>
 
+            {/* Search Friends */}
+            <div className="bg-white rounded-xl p-6 shadow-sm">
+                <h3 className="font-semibold text-gray-900 mb-4">Cari Teman</h3>
+                <div className="space-y-4">
+                    <div className="relative">
+                        <input
+                            type="text"
+                            placeholder="Cari pengguna..."
+                            value={searchQuery}
+                            onChange={handleSearchChange}
+                            className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary focus:border-transparent"
+                        />
+                        <div className="absolute left-3 top-1/2 transform -translate-y-1/2">
+                            <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                            </svg>
+                        </div>
+                    </div>
+                    
+                    {isSearching && (
+                        <div className="flex justify-center py-4">
+                            <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+                        </div>
+                    )}
+                    
+                    {searchResults.length > 0 && (
+                        <div className="space-y-3 max-h-60 overflow-y-auto">
+                            {searchResults.map((searchUser) => (
+                                <div key={searchUser.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                                    <div className="flex items-center space-x-3">
+                                        <div className="w-10 h-10 bg-primary rounded-full flex items-center justify-center">
+                                            <span className="text-white font-bold text-sm">
+                                                {searchUser.name.charAt(0)}
+                                            </span>
+                                        </div>
+                                        <div>
+                                            <h4 className="font-medium text-gray-900">{searchUser.name}</h4>
+                                            <p className="text-sm text-gray-600">{searchUser.email}</p>
+                                            {searchUser.subscription_tier === 'premium' && (
+                                                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 mt-1">
+                                                    👑 Premium
+                                                </span>
+                                            )}
+                                        </div>
+                                    </div>
+                                    <div className="flex space-x-2">
+                                        {searchUser.is_friends ? (
+                                            <>
+                                                <button
+                                                    onClick={() => onStartPrivateChat && onStartPrivateChat(searchUser.id)}
+                                                    className="bg-primary text-white px-3 py-1 rounded-lg text-sm hover:bg-primary-dark transition-colors"
+                                                >
+                                                    Chat
+                                                </button>
+                                                <span className="text-green-600 text-sm px-3 py-1">✓ Teman</span>
+                                            </>
+                                        ) : searchUser.request_status ? (
+                                            <span className="text-gray-500 text-sm px-3 py-1">
+                                                {searchUser.request_status.type === 'sent' ? 'Terkirim' : 'Diterima'}
+                                            </span>
+                                        ) : searchUser.can_send_request ? (
+                                            <button
+                                                onClick={() => sendFriendRequest(searchUser.id)}
+                                                className="bg-green-500 text-white px-3 py-1 rounded-lg text-sm hover:bg-green-600 transition-colors"
+                                            >
+                                                Tambah
+                                            </button>
+                                        ) : (
+                                            <span className="text-gray-400 text-sm px-3 py-1">Tidak dapat mengirim</span>
+                                        )}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                    
+                    {searchQuery && !isSearching && searchResults.length === 0 && (
+                        <div className="text-center py-4">
+                            <p className="text-gray-500">Tidak ada pengguna ditemukan</p>
+                        </div>
+                    )}
+                </div>
+            </div>
+
             {/* Account Info */}
             <div className="bg-white rounded-xl p-6 shadow-sm">
                 <h3 className="font-semibold text-gray-900 mb-4">Informasi Akun</h3>
@@ -478,6 +638,71 @@ const ProfilePage = ({ user, userToken, onLogout, onUserUpdate, onNavigate }) =>
 
     const StatsTab = () => (
         <div className="space-y-6">
+            {/* Detailed Stats Overview */}
+            <div className="bg-white rounded-xl p-6 shadow-sm">
+                <h3 className="font-semibold text-gray-900 mb-4">Statistik Lengkap</h3>
+                <div className="grid grid-cols-2 gap-4">
+                    <div className="bg-blue-50 p-4 rounded-lg text-center">
+                        <div className="text-2xl font-bold text-blue-600">{user?.credit_score || 100}</div>
+                        <div className="text-sm text-blue-800">Credit Score</div>
+                        <div className="text-xs text-gray-600 mt-1">
+                            {user?.credit_score >= 850 ? 'Excellent' :
+                             user?.credit_score >= 700 ? 'Good' :
+                             user?.credit_score >= 600 ? 'Fair' : 'Poor'}
+                        </div>
+                    </div>
+                    <div className="bg-green-50 p-4 rounded-lg text-center">
+                        <div className="text-2xl font-bold text-green-600">
+                            {user?.profile?.experience_years || 0}
+                        </div>
+                        <div className="text-sm text-green-800">Tahun Pengalaman</div>
+                        <div className="text-xs text-gray-600 mt-1">
+                            {(user?.profile?.experience_years || 0) >= 5 ? 'Expert' :
+                             (user?.profile?.experience_years || 0) >= 2 ? 'Intermediate' : 'Beginner'}
+                        </div>
+                    </div>
+                    <div className="bg-purple-50 p-4 rounded-lg text-center">
+                        <div className="text-2xl font-bold text-purple-600">
+                            {user?.profile?.skill_level || 'N/A'}
+                        </div>
+                        <div className="text-sm text-purple-800">Skill Level</div>
+                        <div className="text-xs text-gray-600 mt-1">Overall Rating</div>
+                    </div>
+                    <div className="bg-yellow-50 p-4 rounded-lg text-center">
+                        <div className="text-2xl font-bold text-yellow-600">
+                            {user?.subscription_tier === 'premium' ? '👑' : '🎯'}
+                        </div>
+                        <div className="text-sm text-yellow-800">
+                            {user?.subscription_tier === 'premium' ? 'Premium' : 'Regular'}
+                        </div>
+                        <div className="text-xs text-gray-600 mt-1">Account Type</div>
+                    </div>
+                </div>
+            </div>
+
+            {/* Match Performance */}
+            <div className="bg-white rounded-xl p-6 shadow-sm">
+                <h3 className="font-semibold text-gray-900 mb-4">Performa Match</h3>
+                <div className="space-y-4">
+                    <div className="flex justify-between items-center">
+                        <span className="text-gray-600">Total Matches</span>
+                        <span className="font-bold text-lg">0</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                        <span className="text-gray-600">Win Rate</span>
+                        <span className="font-bold text-lg text-green-600">0%</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                        <span className="text-gray-600">Current Streak</span>
+                        <span className="font-bold text-lg text-blue-600">0</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                        <span className="text-gray-600">Best Streak</span>
+                        <span className="font-bold text-lg text-purple-600">0</span>
+                    </div>
+                </div>
+            </div>
+
             {/* Credit Score History */}
             <div className="bg-white rounded-xl p-6 shadow-sm">
                 <h3 className="font-semibold text-gray-900 mb-4">Riwayat Credit Score</h3>
@@ -527,30 +752,107 @@ const ProfilePage = ({ user, userToken, onLogout, onUserUpdate, onNavigate }) =>
         </div>
     );
 
-    const SettingsTab = () => (
+    const InfoTab = () => (
         <div className="space-y-6">
-            {/* Logout Section */}
+            {/* App Information */}
             <div className="bg-white rounded-xl p-6 shadow-sm">
-                <h3 className="font-semibold text-gray-900 mb-4">Keluar Akun</h3>
-                <p className="text-gray-600 mb-4">
+                <h3 className="font-semibold text-gray-900 mb-4">Tentang Aplikasi</h3>
+                <div className="space-y-3">
+                    <div className="flex justify-between">
+                        <span className="text-gray-600">Nama Aplikasi</span>
+                        <span className="font-medium">SportPWA</span>
+                    </div>
+                    <div className="flex justify-between">
+                        <span className="text-gray-600">Versi</span>
+                        <span className="font-medium">1.0.0</span>
+                    </div>
+                    <div className="flex justify-between">
+                        <span className="text-gray-600">Platform</span>
+                        <span className="font-medium">Progressive Web App</span>
+                    </div>
+                    <div className="flex justify-between">
+                        <span className="text-gray-600">Developer</span>
+                        <span className="font-medium">SportPWA Team</span>
+                    </div>
+                </div>
+            </div>
+
+            {/* System Information */}
+            <div className="bg-white rounded-xl p-6 shadow-sm">
+                <h3 className="font-semibold text-gray-900 mb-4">Informasi Sistem</h3>
+                <div className="space-y-3">
+                    <div className="flex justify-between">
+                        <span className="text-gray-600">User Agent</span>
+                        <span className="font-medium text-xs">
+                            {navigator.userAgent.split(' ')[0]}...
+                        </span>
+                    </div>
+                    <div className="flex justify-between">
+                        <span className="text-gray-600">Browser</span>
+                        <span className="font-medium">
+                            {navigator.userAgent.includes('Chrome') ? 'Chrome' :
+                             navigator.userAgent.includes('Firefox') ? 'Firefox' :
+                             navigator.userAgent.includes('Safari') ? 'Safari' : 'Unknown'}
+                        </span>
+                    </div>
+                    <div className="flex justify-between">
+                        <span className="text-gray-600">Platform</span>
+                        <span className="font-medium">{navigator.platform}</span>
+                    </div>
+                    <div className="flex justify-between">
+                        <span className="text-gray-600">Online Status</span>
+                        <span className={`font-medium ${navigator.onLine ? 'text-green-600' : 'text-red-600'}`}>
+                            {navigator.onLine ? 'Online' : 'Offline'}
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            {/* Privacy & Terms */}
+            <div className="bg-white rounded-xl p-6 shadow-sm">
+                <h3 className="font-semibold text-gray-900 mb-4">Kebijakan & Ketentuan</h3>
+                <div className="space-y-3">
+                    <button className="w-full text-left p-3 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors">
+                        <div className="font-medium text-gray-900">Kebijakan Privasi</div>
+                        <div className="text-sm text-gray-600">Pelajari bagaimana kami melindungi data Anda</div>
+                    </button>
+                    <button className="w-full text-left p-3 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors">
+                        <div className="font-medium text-gray-900">Syarat & Ketentuan</div>
+                        <div className="text-sm text-gray-600">Ketentuan penggunaan aplikasi</div>
+                    </button>
+                    <button className="w-full text-left p-3 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors">
+                        <div className="font-medium text-gray-900">Pusat Bantuan</div>
+                        <div className="text-sm text-gray-600">FAQ dan panduan penggunaan</div>
+                    </button>
+                </div>
+            </div>
+
+            {/* Account Actions */}
+            <div className="bg-white rounded-xl p-6 shadow-sm">
+                <h3 className="font-semibold text-gray-900 mb-4">Aksi Akun</h3>
+                <div className="space-y-3">
+                    <button className="w-full text-left p-3 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors">
+                        <div className="font-medium text-gray-900">Unduh Data Saya</div>
+                        <div className="text-sm text-gray-600">Ekspor semua data akun Anda</div>
+                    </button>
+                    <button className="w-full text-left p-3 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors">
+                        <div className="font-medium text-gray-900">Hapus Cache</div>
+                        <div className="text-sm text-gray-600">Bersihkan data cache aplikasi</div>
+                    </button>
+                </div>
+            </div>
+
+            {/* Logout Section */}
+            <div className="bg-red-50 rounded-xl p-6 border border-red-200">
+                <h3 className="font-semibold text-red-900 mb-4">Keluar Akun</h3>
+                <p className="text-red-700 text-sm mb-4">
                     Keluar dari akun Anda dan kembali ke halaman login.
                 </p>
                 <button 
                     onClick={onLogout}
                     className="w-full bg-red-500 text-white py-3 rounded-xl font-semibold hover:bg-red-600 transition-colors"
                 >
-                    Keluar
-                </button>
-            </div>
-
-            {/* Danger Zone */}
-            <div className="bg-red-50 rounded-xl p-6 border border-red-200">
-                <h3 className="font-semibold text-red-900 mb-4">Zona Berbahaya</h3>
-                <p className="text-red-700 text-sm mb-4">
-                    Tindakan ini tidak dapat dibatalkan. Pastikan Anda memahami konsekuensinya.
-                </p>
-                <button className="bg-red-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-red-700 transition-colors">
-                    Hapus Akun
+                    Keluar dari Akun
                 </button>
             </div>
         </div>
@@ -600,14 +902,14 @@ const ProfilePage = ({ user, userToken, onLogout, onUserUpdate, onNavigate }) =>
                         Statistik
                     </button>
                     <button
-                        onClick={() => setActiveTab('settings')}
+                        onClick={() => setActiveTab('info')}
                         className={`flex-1 py-2 px-4 rounded-lg font-medium transition-colors ${
-                            activeTab === 'settings'
+                            activeTab === 'info'
                                 ? 'bg-white text-primary shadow-sm'
                                 : 'text-gray-600 hover:text-gray-800'
                         }`}
                     >
-                        Pengaturan
+                        Informasi
                     </button>
                 </div>
             </div>
@@ -616,7 +918,7 @@ const ProfilePage = ({ user, userToken, onLogout, onUserUpdate, onNavigate }) =>
             <div className="px-4 pb-20">
                 {activeTab === 'profile' && <ProfileTab />}
                 {activeTab === 'stats' && <StatsTab />}
-                {activeTab === 'settings' && <SettingsTab />}
+                {activeTab === 'info' && <InfoTab />}
             </div>
         </div>
     );

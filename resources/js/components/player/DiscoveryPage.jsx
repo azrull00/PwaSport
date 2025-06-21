@@ -174,51 +174,81 @@ const DiscoveryPage = ({ userToken, onNavigate }) => {
     };
 
     const formatTime = (timeString) => {
+        if (!timeString) return 'TBD';
+        
+        try {
+            // Handle full datetime format
+            if (timeString.includes('T') || timeString.includes(' ')) {
+                const date = new Date(timeString);
+                return date.toLocaleTimeString('id-ID', {
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+            }
+            
+            // Handle time-only format (HH:MM:SS or HH:MM)
+            const timeParts = timeString.split(':');
+            if (timeParts.length >= 2) {
+                const hours = timeParts[0].padStart(2, '0');
+                const minutes = timeParts[1].padStart(2, '0');
+                return `${hours}:${minutes}`;
+            }
+            
+            // Fallback: try to parse as date
         return new Date(`2000-01-01T${timeString}`).toLocaleTimeString('id-ID', {
             hour: '2-digit',
             minute: '2-digit'
         });
+        } catch (error) {
+            console.error('Error formatting time:', timeString, error);
+            return 'TBD';
+        }
     };
 
-    const EventCard = ({ event }) => (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-3">
-            <div className="flex items-start justify-between mb-3">
-                <div className="flex-1">
-                    <h3 className="font-semibold text-gray-900 mb-1">{event.title}</h3>
-                    <p className="text-sm text-gray-600 mb-2">{event.description}</p>
-                    
-                    <div className="flex items-center text-xs text-gray-500 space-x-4 mb-2">
-                        <span className="flex items-center">
-                            <span className="mr-1">🏸</span>
-                            {event.sport?.name || 'Sport'}
-                        </span>
-                        <span className="flex items-center">
-                            <span className="mr-1">📅</span>
-                            {formatDate(event.event_date)}
-                        </span>
-                        <span className="flex items-center">
-                            <span className="mr-1">⏰</span>
-                            {formatTime(event.start_time)}
-                        </span>
+    const EventCard = ({ event }) => {
+        // Use backend calculated participant counts
+        const participantsCount = event.participants_count || event.confirmed_participants_count || 0;
+        
+        return (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-4">
+                {/* Header */}
+                <div className="mb-4">
+                    <h3 className="font-bold text-lg text-gray-900 mb-2">{event.title}</h3>
+                    <p className="text-gray-600 text-sm leading-relaxed mb-3 line-clamp-2">{event.description}</p>
+                </div>
+                
+                {/* Event Info Grid */}
+                <div className="grid grid-cols-2 gap-3 mb-4">
+                    <div className="flex items-center text-sm text-gray-600">
+                        <span className="mr-2 text-base">🏸</span>
+                        <span className="font-medium">{event.sport?.name || 'Sport'}</span>
                     </div>
-
-                    <div className="flex items-center text-xs text-gray-500 space-x-4">
-                        <span className="flex items-center">
-                            <span className="mr-1">📍</span>
-                            {event.location_name}
-                        </span>
-                        <span className="flex items-center">
-                            <span className="mr-1">👥</span>
-                            {event.participants_count || 0}/{event.max_participants}
-                        </span>
+                    <div className="flex items-center text-sm text-gray-600">
+                        <span className="mr-2 text-base">👥</span>
+                        <span>{participantsCount}/{event.max_participants} peserta</span>
+                    </div>
+                    <div className="flex items-center text-sm text-gray-600">
+                        <span className="mr-2 text-base">📅</span>
+                        <span>{event.event_date ? formatDate(event.event_date) : 'Tanggal TBD'}</span>
+                    </div>
+                    <div className="flex items-center text-sm text-gray-600">
+                        <span className="mr-2 text-base">⏰</span>
+                        <span>{event.start_time ? formatTime(event.start_time) : 'Waktu TBD'}</span>
                     </div>
                 </div>
 
-                <div className="text-right">
-                    <div className="text-sm font-semibold text-primary mb-1">
-                        {event.entry_fee ? `Rp ${event.entry_fee.toLocaleString()}` : 'Gratis'}
+                {/* Location */}
+                <div className="flex items-center text-sm text-gray-600 mb-4">
+                    <span className="mr-2 text-base">📍</span>
+                    <span className="flex-1 truncate">{event.location_name || 'Lokasi TBD'}</span>
+                </div>
+
+                {/* Price and Level */}
+                <div className="flex items-center justify-between mb-4">
+                    <div className="text-lg font-bold text-primary">
+                        {event.entry_fee ? `Rp ${parseInt(event.entry_fee).toLocaleString()}` : 'GRATIS'}
                     </div>
-                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                    <span className={`px-3 py-1 rounded-full text-sm font-medium ${
                         event.skill_level_required === 'pemula' ? 'bg-green-100 text-green-700' :
                         event.skill_level_required === 'menengah' ? 'bg-blue-100 text-blue-700' :
                         event.skill_level_required === 'mahir' ? 'bg-orange-100 text-orange-700' :
@@ -226,53 +256,68 @@ const DiscoveryPage = ({ userToken, onNavigate }) => {
                     }`}>
                         {event.skill_level_required || 'Semua Level'}
                     </span>
-                </div>
             </div>
 
+                {/* Action Button */}
             <button 
                 onClick={() => onNavigate('eventDetail', { eventId: event.id })}
-                className="w-full bg-primary text-white py-2 rounded-lg font-medium hover:bg-primary-dark transition-colors"
+                    className="w-full bg-primary text-white py-3 rounded-lg font-semibold hover:bg-primary-dark transition-colors"
             >
-                Lihat Detail
+                    Lihat Detail Event
             </button>
         </div>
     );
+    };
 
     const CommunityCard = ({ community }) => (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-3">
-            <div className="flex items-start justify-between mb-3">
-                <div className="flex-1">
-                    <h3 className="font-semibold text-gray-900 mb-1">{community.name}</h3>
-                    <p className="text-sm text-gray-600 mb-2">{community.description}</p>
-                    
-                    <div className="flex items-center text-xs text-gray-500 space-x-4 mb-2">
-                        <span className="flex items-center">
-                            <span className="mr-1">🏸</span>
-                            {community.sport?.name || 'Sport'}
-                        </span>
-                        <span className="flex items-center">
-                            <span className="mr-1">📍</span>
-                            {community.venue_city || community.city}
-                        </span>
-                        <span className="flex items-center">
-                            <span className="mr-1">👥</span>
-                            {community.member_count || 0} member
-                        </span>
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-4">
+            {/* Header */}
+            <div className="mb-4">
+                <div className="flex items-start justify-between mb-2">
+                    <h3 className="font-bold text-lg text-gray-900 flex-1">{community.name}</h3>
+                    {community.has_icon && community.icon_url && (
+                        <img 
+                            src={community.icon_url} 
+                            alt={community.name}
+                            className="w-10 h-10 rounded-lg object-cover ml-3"
+                        />
+                    )}
+                </div>
+                <p className="text-gray-600 text-sm leading-relaxed mb-3 line-clamp-2">{community.description}</p>
                     </div>
 
-                    <div className="flex items-center text-xs text-gray-500">
-                        <span className="flex items-center">
-                            <span className="mr-1">⭐</span>
-                            Fokus: {community.skill_level_focus || 'Mixed'}
-                        </span>
+            {/* Community Info Grid */}
+            <div className="grid grid-cols-2 gap-3 mb-4">
+                <div className="flex items-center text-sm text-gray-600">
+                    <span className="mr-2 text-base">🏸</span>
+                    <span className="font-medium">{community.sport?.name || 'Sport'}</span>
+                </div>
+                <div className="flex items-center text-sm text-gray-600">
+                    <span className="mr-2 text-base">👥</span>
+                    <span>{community.member_count || 0} member</span>
+                </div>
+                <div className="flex items-center text-sm text-gray-600">
+                    <span className="mr-2 text-base">⭐</span>
+                    <span>Fokus: {community.skill_level_focus || 'Mixed'}</span>
                     </div>
+                <div className="flex items-center text-sm text-gray-600">
+                    <span className="mr-2 text-base">🎯</span>
+                    <span>Rating: {community.average_skill_rating ? parseFloat(community.average_skill_rating).toFixed(1) : 'N/A'}</span>
+                </div>
+            </div>
+
+            {/* Location */}
+            <div className="flex items-center text-sm text-gray-600 mb-4">
+                <span className="mr-2 text-base">📍</span>
+                <span className="flex-1 truncate">{community.venue_city || community.city}</span>
                 </div>
 
-                <div className="text-right">
-                    <div className="text-sm font-semibold text-primary mb-1">
-                        {community.membership_fee ? `Rp ${community.membership_fee.toLocaleString()}/bulan` : 'Gratis'}
+            {/* Price and Type */}
+            <div className="flex items-center justify-between mb-4">
+                <div className="text-lg font-bold text-primary">
+                    {community.membership_fee ? `Rp ${community.membership_fee.toLocaleString()}/bulan` : 'GRATIS'}
                     </div>
-                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                <span className={`px-3 py-1 rounded-full text-sm font-medium ${
                         community.community_type === 'public' ? 'bg-green-100 text-green-700' :
                         community.community_type === 'private' ? 'bg-blue-100 text-blue-700' :
                         'bg-orange-100 text-orange-700'
@@ -280,14 +325,14 @@ const DiscoveryPage = ({ userToken, onNavigate }) => {
                         {community.community_type === 'public' ? 'Publik' :
                          community.community_type === 'private' ? 'Privat' : 'Undangan'}
                     </span>
-                </div>
             </div>
 
+            {/* Action Button */}
             <button 
                 onClick={() => onNavigate('communityDetail', { communityId: community.id })}
-                className="w-full bg-primary text-white py-2 rounded-lg font-medium hover:bg-primary-dark transition-colors"
+                className="w-full bg-primary text-white py-3 rounded-lg font-semibold hover:bg-primary-dark transition-colors"
             >
-                Lihat Detail
+                Lihat Detail Komunitas
             </button>
         </div>
     );
