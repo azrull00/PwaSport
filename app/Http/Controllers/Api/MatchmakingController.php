@@ -15,6 +15,12 @@ use Illuminate\Support\Facades\DB;
 
 class MatchmakingController extends Controller
 {
+    protected $matchmakingService;
+
+    public function __construct(MatchmakingService $matchmakingService)
+    {
+        $this->matchmakingService = $matchmakingService;
+    }
     /**
      * Get fair matchmaking pairs for an event
      */
@@ -412,5 +418,69 @@ class MatchmakingController extends Controller
         return $allParticipants->filter(function($participant) use ($matchedIds) {
             return !$matchedIds->contains($participant['user_id']);
         })->values();
+    }
+
+    /**
+     * Create fair matches using advanced algorithm
+     */
+    public function createFairMatches(Request $request, $eventId)
+    {
+        try {
+            $validator = Validator::make($request->all(), [
+                'auto_save' => 'nullable|boolean',
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Validation failed',
+                    'errors' => $validator->errors()
+                ], 422);
+            }
+
+            $event = Event::findOrFail($eventId);
+            $user = Auth::user();
+
+            // Only host can create matchmaking
+            if ($event->host_id !== $user->id && !$user->hasRole('admin')) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Hanya host yang dapat membuat matchmaking.'
+                ], 403);
+            }
+
+            // Use the new MatchmakingService with fair algorithm
+            $result = $this->matchmakingService->createFairMatches($event);
+
+            if (!$result['success']) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => $result['message'],
+                    'error' => $result['error'] ?? null
+                ], 422);
+            }
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Fair matchmaking berhasil dibuat!',
+                'data' => [
+                    'event_id' => $event->id,
+                    'event_title' => $event->title,
+                    'algorithm_used' => 'Fair Matchmaking Algorithm v2.0',
+                    'total_matches' => $result['total_matches'],
+                    'matched_players' => $result['matched_players'],
+                    'waiting_players' => $result['waiting_players'],
+                    'matches' => $result['matches'],
+                    'queue_info' => $this->matchmakingService->getQueueInfo($event)
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Terjadi kesalahan saat membuat fair matchmaking.',
+                'error' => $e->getMessage()
+            ], 500);
+        }
     }
 } 

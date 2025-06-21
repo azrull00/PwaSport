@@ -695,4 +695,248 @@ class UserController extends Controller
             ], 500);
         }
     }
+
+    /**
+     * Get current user's matchmaking status
+     */
+    public function getMyMatchmakingStatus(Request $request)
+    {
+        try {
+            $user = Auth::user();
+            
+            if (!$user) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'User not authenticated.'
+                ], 401);
+            }
+
+            // Get ongoing/upcoming events where user is participating
+            $ongoingMatches = \App\Models\MatchHistory::with(['event.sport', 'player1.profile', 'player2.profile'])
+                ->where(function($q) use ($user) {
+                    $q->where('player1_id', $user->id)
+                      ->orWhere('player2_id', $user->id);
+                })
+                ->where('match_status', 'ongoing')
+                ->orderBy('created_at', 'desc')
+                ->get();
+
+            // Get scheduled matches (from events with matchmaking)
+            $scheduledMatches = \App\Models\MatchHistory::with(['event.sport', 'player1.profile', 'player2.profile'])
+                ->where(function($q) use ($user) {
+                    $q->where('player1_id', $user->id)
+                      ->orWhere('player2_id', $user->id);
+                })
+                ->where('match_status', 'scheduled')
+                ->orderBy('match_date', 'asc')
+                ->get();
+
+            // Get events where user is confirmed and matchmaking might happen
+            $upcomingEvents = \App\Models\Event::with(['sport', 'participants'])
+                ->whereHas('participants', function($q) use ($user) {
+                    $q->where('user_id', $user->id)
+                      ->whereIn('status', ['confirmed', 'checked_in']);
+                })
+                ->where('status', 'published')
+                ->where('event_date', '>=', now())
+                ->orderBy('event_date', 'asc')
+                ->get();
+
+            $matchmakingStatus = [];
+            foreach ($upcomingEvents as $event) {
+                $hasActiveMatchmaking = \App\Models\MatchHistory::where('event_id', $event->id)
+                    ->where(function($q) use ($user) {
+                        $q->where('player1_id', $user->id)
+                          ->orWhere('player2_id', $user->id);
+                    })
+                    ->whereIn('match_status', ['ongoing', 'scheduled'])
+                    ->exists();
+
+                $confirmedParticipants = $event->participants()->where('status', 'confirmed')->count();
+                
+                $matchmakingStatus[] = [
+                    'event' => $event,
+                    'has_matchmaking' => $hasActiveMatchmaking,
+                    'confirmed_participants' => $confirmedParticipants,
+                    'can_start_matchmaking' => $confirmedParticipants >= 2,
+                    'status' => $hasActiveMatchmaking ? 'Matchmaking Aktif' : 
+                               ($confirmedParticipants >= 2 ? 'Siap Matchmaking' : 'Menunggu Peserta')
+                ];
+            }
+
+            return response()->json([
+                'status' => 'success',
+                'data' => [
+                    'ongoing_matches' => $ongoingMatches,
+                    'scheduled_matches' => $scheduledMatches,
+                    'upcoming_events' => $matchmakingStatus,
+                    'summary' => [
+                        'ongoing_count' => $ongoingMatches->count(),
+                        'scheduled_count' => $scheduledMatches->count(),
+                        'upcoming_events_count' => $upcomingEvents->count(),
+                    ]
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Terjadi kesalahan saat mengambil status matchmaking.',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Get current user's match history
+     */
+    public function getMyMatchHistory(Request $request)
+    {
+        try {
+            $user = Auth::user();
+            
+            if (!$user) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'User not authenticated.'
+                ], 401);
+            }
+            
+            $query = \App\Models\MatchHistory::with([
+                'event.sport', 
+                'player1.profile', 
+                'player2.profile'
+            ])
+            ->where(function($q) use ($user) {
+                $q->where('player1_id', $user->id)
+                  ->orWhere('player2_id', $user->id);
+            });
+
+            // Filter by sport
+            if ($request->has('sport_id') && $request->sport_id) {
+                $query->whereHas('event', function($q) use ($request) {
+                    $q->where('sport_id', $request->sport_id);
+                });
+            }
+
+            // Filter by result
+            if ($request->has('result') && $request->result) {
+                if ($request->result === 'wins') {
+                    $query->where(function($q) use ($user) {
+                        $q->where('player1_id', $user->id)->where('result', 'player1_win')
+                          ->orWhere('player2_id', $user->id)->where('result', 'player2_win');
+                    });
+                } elseif ($request->result === 'losses') {
+                    $query->where(function($q) use ($user) {
+                        $q->where('player1_id', $user->id)->where('result', 'player2_win')
+                          ->orWhere('player2_id', $user->id)->where('result', 'player1_win');
+                    });
+                } elseif ($request->result === 'draws') {
+                    $query->where('result', 'draw');
+                }
+            }
+
+            // Filter by date range
+            if ($request->has('date_from') && $request->date_from) {
+                $query->where('match_date', '>=', $request->date_from);
+            }
+            if ($request->has('date_to') && $request->date_to) {
+                $query->where('match_date', '<=', $request->date_to);
+            }
+
+            $query->orderBy('match_date', 'desc')
+                  ->orderBy('created_at', 'desc');
+
+            $perPage = $request->get('per_page', 15);
+            $matches = $query->paginate($perPage);
+
+            // Add match result from user's perspective
+            foreach ($matches as $match) {
+                $isPlayer1 = $match->player1_id === $user->id;
+                $opponent = $isPlayer1 ? $match->player2 : $match->player1;
+                
+                // Handle potentially null scores safely
+                $myScore = null;
+                $opponentScore = null;
+                
+                if ($match->match_score && is_array($match->match_score)) {
+                    $myScore = $isPlayer1 ? 
+                        ($match->match_score['player1_score'] ?? null) : 
+                        ($match->match_score['player2_score'] ?? null);
+                    $opponentScore = $isPlayer1 ? 
+                        ($match->match_score['player2_score'] ?? null) : 
+                        ($match->match_score['player1_score'] ?? null);
+                }
+
+                if ($match->result === 'draw') {
+                    $matchResult = 'draw';
+                } elseif (
+                    ($isPlayer1 && $match->result === 'player1_win') ||
+                    (!$isPlayer1 && $match->result === 'player2_win')
+                ) {
+                    $matchResult = 'win';
+                } else {
+                    $matchResult = 'loss';
+                }
+
+                $match->user_perspective = [
+                    'opponent' => $opponent,
+                    'my_score' => $myScore,
+                    'opponent_score' => $opponentScore,
+                    'result' => $matchResult,
+                    'result_text' => $matchResult === 'win' ? 'Menang' : 
+                                    ($matchResult === 'loss' ? 'Kalah' : 'Seri')
+                ];
+            }
+
+            // Get statistics
+            $totalMatches = \App\Models\MatchHistory::where(function($q) use ($user) {
+                $q->where('player1_id', $user->id)
+                  ->orWhere('player2_id', $user->id);
+            })->whereNotNull('result')->count();
+
+            $wins = \App\Models\MatchHistory::where(function($q) use ($user) {
+                $q->where('player1_id', $user->id)->where('result', 'player1_win')
+                  ->orWhere('player2_id', $user->id)->where('result', 'player2_win');
+            })->count();
+
+            $losses = \App\Models\MatchHistory::where(function($q) use ($user) {
+                $q->where('player1_id', $user->id)->where('result', 'player2_win')
+                  ->orWhere('player2_id', $user->id)->where('result', 'player1_win');
+            })->count();
+
+            $draws = \App\Models\MatchHistory::where(function($q) use ($user) {
+                $q->where('player1_id', $user->id)
+                  ->orWhere('player2_id', $user->id);
+            })->where('result', 'draw')->count();
+
+            $winRate = $totalMatches > 0 ? round(($wins / $totalMatches) * 100, 1) : 0;
+
+            return response()->json([
+                'status' => 'success',
+                'data' => [
+                    'matches' => $matches,
+                    'statistics' => [
+                        'total_matches' => $totalMatches,
+                        'wins' => $wins,
+                        'losses' => $losses,
+                        'draws' => $draws,
+                        'win_rate' => $winRate
+                    ]
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            \Log::error('Match History Error: ' . $e->getMessage(), [
+                'user_id' => Auth::id(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Terjadi kesalahan saat mengambil riwayat pertandingan.',
+                'error' => config('app.debug') ? $e->getMessage() : 'Internal server error'
+            ], 500);
+        }
+    }
 }

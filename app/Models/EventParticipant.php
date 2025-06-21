@@ -38,6 +38,12 @@ class EventParticipant extends Model
         return $this->belongsTo(User::class);
     }
 
+    public function currentMatches()
+    {
+        return $this->hasMany(MatchHistory::class, 'player1_id', 'user_id')
+            ->orWhere('player2_id', $this->user_id);
+    }
+
     // Scopes
     public function scopeConfirmed($query)
     {

@@ -5,6 +5,8 @@ import ChatPage from './ChatPage';
 import ProfilePage from './ProfilePage';
 import EventDetailPage from './EventDetailPage';
 import CommunityDetailPage from './CommunityDetailPage';
+import MatchmakingStatusPage from './MatchmakingStatusPage';
+import MatchHistoryPage from './MatchHistoryPage';
 
 const MainLayout = ({ userType, userToken, userData, onLogout }) => {
     const [activeTab, setActiveTab] = useState('home');
@@ -48,7 +50,7 @@ const MainLayout = ({ userType, userToken, userData, onLogout }) => {
     }, [userToken]);
 
     const handleNavigation = (page, params = null) => {
-        if (page === 'eventDetail' || page === 'communityDetail') {
+        if (page === 'eventDetail' || page === 'communityDetail' || page === 'matchmakingStatus' || page === 'matchHistory') {
             // For detail pages, don't change activeTab but update currentView
             setCurrentView({ page, params });
         } else {
@@ -74,7 +76,7 @@ const MainLayout = ({ userType, userToken, userData, onLogout }) => {
             case 'chat':
                 return <ChatPage user={user} userToken={userToken} />;
             case 'profile':
-                return <ProfilePage user={user} userToken={userToken} onLogout={onLogout} onUserUpdate={setUser} />;
+                return <ProfilePage user={user} userToken={userToken} onLogout={onLogout} onUserUpdate={setUser} onNavigate={handleNavigation} />;
             case 'eventDetail':
                 return (
                     <EventDetailPage 
@@ -93,6 +95,22 @@ const MainLayout = ({ userType, userToken, userData, onLogout }) => {
                         onBack={handleBack}
                     />
                 );
+            case 'matchmakingStatus':
+                return (
+                    <MatchmakingStatusPage 
+                        userToken={userToken} 
+                        onNavigate={handleNavigation}
+                        onBack={handleBack}
+                    />
+                );
+            case 'matchHistory':
+                return (
+                    <MatchHistoryPage 
+                        userToken={userToken} 
+                        onNavigate={handleNavigation}
+                        onBack={handleBack}
+                    />
+                );
             default:
                 return <HomePage user={user} userToken={userToken} onNavigate={handleNavigation} />;
         }
@@ -106,7 +124,7 @@ const MainLayout = ({ userType, userToken, userData, onLogout }) => {
             </div>
 
             {/* Bottom Navigation - Hide on detail pages */}
-            {!['eventDetail', 'communityDetail'].includes(currentView.page) && (
+            {!['eventDetail', 'communityDetail', 'matchmakingStatus', 'matchHistory'].includes(currentView.page) && (
                 <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-50">
                     <div className="flex justify-around items-center py-2">
                         {navigationTabs.map((tab) => (

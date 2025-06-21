@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 
-const ProfilePage = ({ user, userToken, onLogout, onUserUpdate }) => {
+const ProfilePage = ({ user, userToken, onLogout, onUserUpdate, onNavigate }) => {
     const [isEditing, setIsEditing] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [activeTab, setActiveTab] = useState('profile'); // profile, stats, settings
@@ -409,6 +409,29 @@ const ProfilePage = ({ user, userToken, onLogout, onUserUpdate }) => {
                         </div>
                     </div>
                 )}
+            </div>
+
+            {/* Quick Actions */}
+            <div className="bg-white rounded-xl p-6 shadow-sm">
+                <h3 className="font-semibold text-gray-900 mb-4">Akses Cepat</h3>
+                <div className="grid grid-cols-2 gap-3">
+                    <button 
+                        onClick={() => onNavigate('matchmakingStatus')}
+                        className="bg-white border-2 border-primary p-4 rounded-xl text-center hover:bg-primary transition-colors group"
+                    >
+                        <div className="text-2xl mb-2">🎯</div>
+                        <div className="text-sm font-medium text-primary group-hover:text-white">Status Matchmaking</div>
+                        <div className="text-xs text-gray-600 group-hover:text-gray-100 mt-1">Lihat status pertandingan</div>
+                    </button>
+                    <button 
+                        onClick={() => onNavigate('matchHistory')}
+                        className="bg-white border-2 border-green-500 p-4 rounded-xl text-center hover:bg-green-500 transition-colors group"
+                    >
+                        <div className="text-2xl mb-2">📋</div>
+                        <div className="text-sm font-medium text-green-600 group-hover:text-white">Riwayat Match</div>
+                        <div className="text-xs text-gray-600 group-hover:text-gray-100 mt-1">Lihat statistik Anda</div>
+                    </button>
+                </div>
             </div>
 
             {/* Account Info */}

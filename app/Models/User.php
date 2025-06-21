@@ -99,6 +99,30 @@ class User extends Authenticatable
             ->orWhere('player2_id', $this->id);
     }
 
+    public function matchesAsPlayer1()
+    {
+        return $this->hasMany(MatchHistory::class, 'player1_id');
+    }
+
+    public function matchesAsPlayer2()
+    {
+        return $this->hasMany(MatchHistory::class, 'player2_id');
+    }
+
+    public function allMatches()
+    {
+        return MatchHistory::where('player1_id', $this->id)
+            ->orWhere('player2_id', $this->id);
+    }
+
+    public function hasActiveMatch()
+    {
+        return MatchHistory::where(function($query) {
+            $query->where('player1_id', $this->id)
+                  ->orWhere('player2_id', $this->id);
+        })->whereIn('match_status', ['scheduled', 'ongoing'])->exists();
+    }
+
     public function givenRatings()
     {
         return $this->hasMany(PlayerRating::class, 'rating_user_id');

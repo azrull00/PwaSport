@@ -53,6 +53,8 @@ Route::middleware('auth:sanctum')->group(function () {
         // My events and QR code routes (must be before /{user} routes)
         Route::get('/my-events', [UserController::class, 'getMyEvents']);
         Route::get('/my-qr-code', [UserController::class, 'getMyQRCode']);
+        Route::get('/my-matchmaking-status', [UserController::class, 'getMyMatchmakingStatus']);
+        Route::get('/my-match-history', [UserController::class, 'getMyMatchHistory']);
         
         // Profile management
         Route::get('/profile', [UserController::class, 'getProfile']);
@@ -254,6 +256,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('matchmaking/{eventId}', [MatchmakingController::class, 'getMatchmakingStatus']);
         Route::post('matchmaking/{eventId}/generate', [MatchmakingController::class, 'generateEventMatchmaking']);
         Route::post('matchmaking/{eventId}/save', [MatchmakingController::class, 'saveMatchmaking']);
+        Route::post('matchmaking/{eventId}/fair-matches', [MatchmakingController::class, 'createFairMatches']);
     });
 
     // Venue Management
