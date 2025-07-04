@@ -1,0 +1,996 @@
+\documentclass[12pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[bahasa]{babel}
+\usepackage{geometry}
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\usepackage{graphicx}
+\usepackage{tikz}
+\usepackage{pgfplots}
+\usepackage{float}
+\usepackage{algorithm}
+\usepackage{algorithmic}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{subcaption}
+\usepackage{fancyhdr}
+\usepackage{titlesec}
+
+\geometry{
+    a4paper,
+    margin=1in
+}
+
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{SportPWA - Panduan Matchmaking System}
+\fancyhead[R]{\thepage}
+\fancyfoot[C]{© 2025 SportPWA - Panduan Praktis}
+
+\usetikzlibrary{shapes,arrows,positioning,calc}
+
+\definecolor{primaryblue}{RGB}{59, 130, 246}
+\definecolor{secondarygreen}{RGB}{34, 197, 94}
+\definecolor{warningorange}{RGB}{251, 146, 60}
+\definecolor{dangerred}{RGB}{239, 68, 68}
+\definecolor{codegray}{RGB}{248, 249, 250}
+
+\lstset{
+    basicstyle=\ttfamily\footnotesize,
+    breaklines=true,
+    frame=single,
+    numbers=left,
+    numberstyle=\tiny,
+    showstringspaces=false,
+    commentstyle=\color{gray},
+    keywordstyle=\color{primaryblue},
+    stringstyle=\color{secondarygreen},
+    backgroundcolor=\color{codegray},
+    captionpos=b
+}
+
+\title{
+    \vspace{-2cm}
+    {\Huge\textbf{SportPWA Matchmaking System}}\\
+    \vspace{0.5cm}
+    {\Large Panduan Lengkap dan Mudah Dipahami}\\
+    \vspace{0.3cm}
+    {\large Dari Join Event sampai Match Selesai}\\
+    \vspace{0.3cm}
+    {\large Version 2.0 - Januari 2025}
+}
+
+\author{
+    SportPWA Development Team\\
+    \texttt{team@sportpwa.com}
+}
+
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\tableofcontents
+\newpage
+
+\section{Pengantar - Apa itu SportPWA?}
+
+SportPWA adalah aplikasi olahraga yang membantu pemain menemukan lawan bertanding yang seimbang. Bayangkan kamu ingin main badminton tapi bingung cari lawan yang levelnya sama - nah, SportPWA ini yang akan bantu carikan!
+
+\subsection{Kenapa Perlu Sistem Matchmaking?}
+\begin{itemize}
+    \item \textbf{Fair Play}: Supaya pertandingan nggak ada yang menang telak
+    \item \textbf{Credit Score}: Mengatur perilaku pemain biar nggak sering batal-batal
+    \item \textbf{Queue yang Rapi}: Antrian yang tertib, nggak rebutan court
+    \item \textbf{Rating System}: Tracking kemampuan pemain dari waktu ke waktu
+\end{itemize}
+
+\subsection{Komponen Utama}
+\begin{itemize}
+    \item \textbf{Event Management}: Daftar event, join, check-in
+    \item \textbf{Fair Matchmaking}: Carikan lawan yang seimbang
+    \item \textbf{Credit Score}: Poin perilaku (0-100)
+    \item \textbf{MMR System}: Rating skill pemain per olahraga
+    \item \textbf{Court Management}: Atur lapangan dan antrian
+\end{itemize}
+
+\section{Perjalanan Player: Dari Daftar sampai Main}
+
+\subsection{Gambaran Umum Perjalanan Player}
+
+Ini dia step-by-step yang dialami player di SportPWA:
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+    node distance=1.8cm,
+    start/.style={rectangle, rounded corners, minimum width=3cm, minimum height=1cm, text centered, draw=primaryblue, fill=primaryblue!20},
+    process/.style={rectangle, minimum width=3cm, minimum height=1cm, text centered, draw=secondarygreen, fill=secondarygreen!20},
+    decision/.style={diamond, minimum width=2cm, minimum height=1cm, text centered, draw=warningorange, fill=warningorange!20},
+    end/.style={rectangle, rounded corners, minimum width=3cm, minimum height=1cm, text centered, draw=dangerred, fill=dangerred!20},
+    arrow/.style={thick,->,>=stealth}
+]
+
+\node (start) [start] {Browse Event\\di App};
+\node (register) [process, below of=start] {Klik "Join Event"};
+\node (check1) [decision, below of=register] {Credit Score\\Cukup?};
+\node (waiting) [process, below left of=check1, xshift=-1cm] {Masuk\\Waiting List};
+\node (confirmed) [process, below right of=check1, xshift=1cm] {Terkonfirmasi\\Join};
+\node (checkin) [process, below of=confirmed] {Check-in di\\Lokasi Event};
+\node (matchmaking) [process, below of=checkin] {Sistem Cari\\Lawan};
+\node (courtassign) [process, below of=matchmaking] {Dapet Nomor\\Court};
+\node (match) [process, below of=courtassign] {Main\\Badminton!};
+\node (rating) [process, below of=match] {Kasih Rating\\ke Lawan};
+\node (credit) [process, below of=rating] {Update Credit\\Score};
+\node (mmr) [end, below of=credit] {Update MMR\\& History};
+
+\draw [arrow] (start) -- (register);
+\draw [arrow] (register) -- (check1);
+\draw [arrow] (check1) -- node[anchor=south east] {< 40} (waiting);
+\draw [arrow] (check1) -- node[anchor=south west] {≥ 40} (confirmed);
+\draw [arrow] (waiting) -- (confirmed);
+\draw [arrow] (confirmed) -- (checkin);
+\draw [arrow] (checkin) -- (matchmaking);
+\draw [arrow] (matchmaking) -- (courtassign);
+\draw [arrow] (courtassign) -- (match);
+\draw [arrow] (match) -- (rating);
+\draw [arrow] (rating) -- (credit);
+\draw [arrow] (credit) -- (mmr);
+
+\end{tikzpicture}
+\caption{Perjalanan Player dari Daftar sampai Selesai Main}
+\end{figure}
+
+\subsection{Step 1: Join Event dan Pengecekan Credit Score}
+
+Pas player mau join event, sistem akan cek dulu credit score-nya. Ini kode yang digunakan:
+
+\begin{lstlisting}[language=PHP, caption=Pengecekan Join Event di CreditScoreService.php]
+public function canJoinEvent(User $user, Event $event)
+{
+    $restrictions = $this->checkCreditScoreRestrictions($user);
+    
+    // Cek credit score basic
+    if (!$restrictions['can_join_events']) {
+        return [
+            'can_join' => false,
+            'reason' => 'Credit score terlalu rendah untuk join event.'
+        ];
+    }
+
+    // Cek untuk premium event
+    if ($event->is_premium && !$restrictions['can_join_premium_events']) {
+        return [
+            'can_join' => false,
+            'reason' => 'Credit score tidak mencukupi untuk premium event.'
+        ];
+    }
+
+    // Cek batas event per minggu
+    $weeklyJoins = $this->getUserWeeklyEventJoins($user);
+    if ($weeklyJoins >= $restrictions['max_events_per_week']) {
+        return [
+            'can_join' => false,
+            'reason' => 'Telah mencapai batas maksimal event per minggu.'
+        ];
+    }
+
+    return ['can_join' => true, 'reason' => null];
+}
+\end{lstlisting}
+
+\subsubsection{Aturan Credit Score}
+Ini dia aturan main credit score di SportPWA:
+
+\begin{table}[H]
+\centering
+\begin{tabular}{|c|c|c|c|}
+\hline
+\textbf{Credit Score} & \textbf{Bisa Join Event?} & \textbf{Premium Event?} & \textbf{Max Event/Minggu} \\
+\hline
+0-39 & ❌ Nggak Bisa & ❌ & 0 \\
+40-59 & ✅ Bisa & ❌ & 3 \\
+60-79 & ✅ Bisa & ✅ Bisa & 10 \\
+80-100 & ✅ Bisa & ✅ Bisa & Unlimited \\
+\hline
+\end{tabular}
+\caption{Aturan Credit Score yang Mudah Dipahami}
+\end{table}
+
+\subsection{Step 2: Check-in dan Konfirmasi Kehadiran}
+
+Setelah join, player harus check-in di lokasi event. Ada 2 cara:
+\begin{itemize}
+    \item \textbf{QR Code}: Host scan QR code player
+    \item \textbf{Manual}: Host confirm manual di app
+\end{itemize}
+
+\section{Sistem Matchmaking yang Fair}
+
+\subsection{Gimana Caranya Sistem Cari Lawan yang Cocok?}
+
+Sistem kita punya algoritma khusus buat carikan lawan yang seimbang. Ini dia cara kerjanya:
+
+\begin{lstlisting}[language=PHP, caption=Algoritma Fair Matchmaking di MatchmakingService.php]
+public function createFairMatches(Event $event)
+{
+    try {
+        DB::beginTransaction();
+
+        // Ambil semua peserta yang udah check-in
+        $participants = $this->getEligibleParticipants($event);
+        
+        if ($participants->count() < 2) {
+            return [
+                'success' => false,
+                'message' => 'Minimal 2 orang buat bisa main'
+            ];
+        }
+
+        // Hitung compatibility score semua pasangan
+        $possibleMatches = $this->calculateCompatibilityScores($participants, $event);
+        
+        // Pilih pasangan terbaik
+        $matches = $this->optimizeMatches($possibleMatches, $event);
+        
+        // Simpan ke database
+        $savedMatches = $this->saveMatches($matches, $event);
+        
+        DB::commit();
+        
+        return [
+            'success' => true,
+            'matches' => $savedMatches,
+            'total_matches' => count($savedMatches),
+        ];
+
+    } catch (\Exception $e) {
+        DB::rollBack();
+        return ['success' => false, 'message' => 'Ada error nih'];
+    }
+}
+\end{lstlisting}
+
+\subsection{Faktor-faktor yang Dipertimbangkan}
+
+Sistem kita lihat 4 hal buat tentuin pasangan yang cocok:
+
+\begin{enumerate}
+    \item \textbf{MMR (40\%)}: Rating skill pemain - yang paling penting
+    \item \textbf{Level (25\%)}: Beginner, intermediate, advanced, expert
+    \item \textbf{Win Rate (20\%)}: Persentase menang pemain
+    \item \textbf{Waiting Time (15\%)}: Berapa lama udah nungguin
+\end{enumerate}
+
+\begin{lstlisting}[language=PHP, caption=Calculation Compatibility Score]
+private function calculateCompatibility($participant1, $participant2, Event $event)
+{
+    $player1 = $participant1->user;
+    $player2 = $participant2->user;
+    
+    // Ambil rating untuk olahraga ini
+    $rating1 = $this->getUserSportRating($player1, $event->sport_id);
+    $rating2 = $this->getUserSportRating($player2, $event->sport_id);
+
+    // Hitung masing-masing faktor
+    $mmrScore = $this->calculateMMRCompatibility($rating1['mmr'], $rating2['mmr']);
+    $winRateScore = $this->calculateWinRateCompatibility($rating1['win_rate'], $rating2['win_rate']);
+    $waitingTimeScore = $this->calculateWaitingTimeBonus($participant1, $participant2);
+    $levelScore = $this->calculateLevelCompatibility($rating1['level'], $rating2['level']);
+
+    // Bobot masing-masing faktor
+    $weights = [
+        'mmr' => 0.4,         // 40% - Paling penting
+        'level' => 0.25,      // 25% - Level skill
+        'win_rate' => 0.2,    // 20% - Konsistensi
+        'waiting_time' => 0.15 // 15% - Fairness buat yang nunggu
+    ];
+
+    $totalScore = (
+        $mmrScore * $weights['mmr'] +
+        $levelScore * $weights['level'] +
+        $winRateScore * $weights['win_rate'] +
+        $waitingTimeScore * $weights['waiting_time']
+    );
+
+    return ['total' => round($totalScore, 2), 'details' => [...]];
+}
+\end{lstlisting}
+
+\subsection{MMR Compatibility - Semakin Dekat Semakin Bagus}
+
+Ini cara sistem ngitung MMR compatibility:
+
+\begin{lstlisting}[language=PHP, caption=MMR Compatibility Calculation]
+private function calculateMMRCompatibility($mmr1, $mmr2)
+{
+    $difference = abs($mmr1 - $mmr2);
+    
+    // Beda MMR yang ideal: 0-100 poin
+    if ($difference <= 50) {
+        return 100; // Perfect match!
+    } elseif ($difference <= 100) {
+        return 90 - ($difference - 50); // 90-40 range
+    } elseif ($difference <= 200) {
+        return 40 - (($difference - 100) * 0.3); // 40-10 range
+    } else {
+        return max(0, 10 - (($difference - 200) * 0.05)); // 10-0 range
+    }
+}
+\end{lstlisting}
+
+\subsubsection{Level Skill dan MMR Range}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{|c|c|c|}
+\hline
+\textbf{MMR Range} & \textbf{Level} & \textbf{Deskripsi} \\
+\hline
+< 800 & Beginner & Baru belajar, masih basic \\
+800-1199 & Intermediate & Udah lumayan, paham teknik dasar \\
+1200-1599 & Advanced & Jago, teknik dan strategi bagus \\
+1600-1999 & Expert & Ahli, level kompetitif \\
+≥ 2000 & Professional & Pro, level tournament \\
+\hline
+\end{tabular}
+\caption{Level Skill berdasarkan MMR}
+\end{table}
+
+\section{Credit Score System - Sistem Poin Perilaku}
+
+\subsection{Apa itu Credit Score?}
+
+Credit Score itu kayak poin perilaku di SportPWA. Range-nya 0-100:
+\begin{itemize}
+    \item \textbf{100}: User baru, perilaku perfect
+    \item \textbf{80-99}: Bagus banget, nggak ada masalah
+    \item \textbf{60-79}: Cukup baik, bisa akses premium
+    \item \textbf{40-59}: Agak bermasalah, terbatas aksesnya
+    \item \textbf{0-39}: Bermasalah, nggak bisa join event
+\end{itemize}
+
+\subsection{Cara Dapet dan Kehilangan Poin}
+
+\subsubsection{Penalty (Minus Poin)}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{|c|c|c|}
+\hline
+\textbf{Pelanggaran} & \textbf{Minus Poin} & \textbf{Kapan} \\
+\hline
+Cancel ≥ 24 jam & -5 & Masih aman \\
+Cancel 12-24 jam & -10 & Mulai kena penalty \\
+Cancel 6-12 jam & -15 & Lumayan sakit \\
+Cancel 2-6 jam & -20 & Sakit banget \\
+Cancel < 2 jam & -25 & Maksimal penalty \\
+No-Show (nggak dateng) & -30 & Paling parah \\
+Rating jelek (< 2.0) & -5 & Dari rating lawan \\
+\hline
+\end{tabular}
+\caption{Penalty Credit Score}
+\end{table}
+
+\begin{lstlisting}[language=PHP, caption=Penalty Cancellation di CreditScoreService.php]
+private function calculateCancellationPenalty(Event $event)
+{
+    $hoursBeforeEvent = $this->getHoursBeforeEvent($event);
+
+    if ($hoursBeforeEvent >= 24) {
+        return 5;  // -5 poin untuk 24+ jam sebelumnya
+    } elseif ($hoursBeforeEvent >= 12) {
+        return 10; // -10 poin untuk 12-24 jam sebelumnya
+    } elseif ($hoursBeforeEvent >= 6) {
+        return 15; // -15 poin untuk 6-12 jam sebelumnya
+    } elseif ($hoursBeforeEvent >= 2) {
+        return 20; // -20 poin untuk 2-6 jam sebelumnya
+    } else {
+        return 25; // -25 poin untuk < 2 jam sebelumnya
+    }
+}
+\end{lstlisting}
+
+\subsubsection{Bonus (Plus Poin)}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{|c|c|c|}
+\hline
+\textbf{Achievement} & \textbf{Plus Poin} & \textbf{Syarat} \\
+\hline
+Selesaikan Event & +2 & Check-in dan ikut sampai selesai \\
+Rating Bagus & +1 & Dapet rating ≥ 4.0/5.0 \\
+5 Event Berturut & +5 & 5 event selesai dalam 30 hari \\
+Perfect Attendance & +3 & Nggak cancel dalam 30 hari \\
+\hline
+\end{tabular}
+\caption{Bonus Credit Score}
+\end{table}
+
+\begin{lstlisting}[language=PHP, caption=Bonus Event Completion]
+public function processEventCompletionBonus(User $user, Event $event)
+{
+    // Cek udah pernah dapet bonus atau belum
+    $existingBonus = CreditScoreLog::where([
+        'user_id' => $user->id,
+        'event_id' => $event->id,
+        'type' => 'event_completion_bonus'
+    ])->first();
+
+    if ($existingBonus) {
+        return 0; // Udah pernah dapet
+    }
+
+    $baseBonus = 2; // Bonus dasar completion
+    $this->applyCreditScoreChange($user, $baseBonus, 'event_completion_bonus', 
+        "Bonus completion event: {$event->title}", $event->id);
+
+    // Cek bonus berturut-turut
+    $consecutiveBonus = $this->checkAndApplyConsecutiveBonus($user);
+    
+    return $baseBonus + $consecutiveBonus;
+}
+\end{lstlisting}
+
+\section{MMR System - Rating Skill Pemain}
+
+\subsection{Apa itu MMR?}
+
+MMR (Match Making Rating) adalah angka yang nunjukkin skill level pemain untuk masing-masing olahraga. Sistem kita pakai modifikasi dari Elo Rating yang dipake di catur dan game online.
+
+\subsubsection{Rumus Dasar MMR}
+
+\begin{equation}
+MMR_{baru} = MMR_{lama} + K \times (HasilAsli - HasilPrediksi)
+\end{equation}
+
+Dimana:
+\begin{itemize}
+    \item \textbf{K}: Faktor development (10-40)
+    \item \textbf{HasilAsli}: 1 (menang), 0.5 (draw), 0 (kalah)
+    \item \textbf{HasilPrediksi}: Probabilitas menang berdasarkan MMR
+\end{itemize}
+
+\subsection{Implementasi MMR Update}
+
+\begin{lstlisting}[language=PHP, caption=Update MMR After Match di MatchmakingService.php]
+private function updateMMRAfterMatch($player1, $player2, $matchResult, $sport)
+{
+    $rating1 = $this->getUserSportRating($player1, $sport);
+    $rating2 = $this->getUserSportRating($player2, $sport);
+
+    // Hitung expected score (prediksi)
+    $expected1 = 1 / (1 + pow(10, ($rating2['mmr'] - $rating1['mmr']) / 400));
+    $expected2 = 1 - $expected1;
+
+    // Tentukan actual score (hasil asli)
+    $actual1 = ($matchResult == 'player1_win') ? 1 : 
+               (($matchResult == 'draw') ? 0.5 : 0);
+    $actual2 = 1 - $actual1;
+
+    // Hitung K-factor
+    $k1 = $this->calculateKFactor($rating1);
+    $k2 = $this->calculateKFactor($rating2);
+
+    // Update MMR
+    $newMMR1 = $rating1['mmr'] + $k1 * ($actual1 - $expected1);
+    $newMMR2 = $rating2['mmr'] + $k2 * ($actual2 - $expected2);
+
+    // Simpan ke database
+    $this->updateUserSportRating($player1, $newMMR1, $matchResult);
+    $this->updateUserSportRating($player2, $newMMR2, $matchResult);
+}
+\end{lstlisting}
+
+\subsubsection{K-Factor - Seberapa Cepat MMR Berubah}
+
+\begin{lstlisting}[language=PHP, caption=Calculation K-Factor]
+private function calculateKFactor($rating)
+{
+    $matches = $rating['matches_played'];
+    $mmr = $rating['mmr'];
+    
+    // Player baru: perubahan cepat
+    if ($matches < 10) {
+        return 40;
+    }
+    // Player developing: masih cepat
+    elseif ($matches < 30) {
+        return 30;
+    }
+    // Berdasarkan skill level
+    elseif ($mmr < 1200) {
+        return 20; // Lower skill: perubahan sedang
+    }
+    elseif ($mmr < 1800) {
+        return 15; // Intermediate: perubahan lambat
+    }
+    else {
+        return 10; // High skill: perubahan sangat lambat
+    }
+}
+\end{lstlisting}
+
+\section{Court Management - Atur Lapangan dan Antrian}
+
+\subsection{Penjelasan Rumus-Rumus Penting}
+
+Sebelum lanjut ke court management, mari kita bahas rumus-rumus penting yang dipakai sistem dengan penjelasan yang mudah dipahami:
+
+\subsubsection{1. Rumus MMR (Match Making Rating)}
+
+\textbf{Rumus Dasar:}
+\begin{equation}
+MMR_{baru} = MMR_{lama} + K \times (HasilAsli - HasilPrediksi)
+\end{equation}
+
+\textbf{Penjelasan Sederhana:}
+\begin{itemize}
+    \item \textbf{MMR\_lama}: Rating skill kamu sebelum main (contoh: 1200)
+    \item \textbf{K}: Seberapa cepat rating berubah (10-40, makin baru makin cepat)
+    \item \textbf{HasilAsli}: Hasil match nyata (Menang=1, Draw=0.5, Kalah=0)
+    \item \textbf{HasilPrediksi}: Berapa kemungkinan kamu menang (0-1)
+\end{itemize}
+
+\textbf{Contoh Praktis:}
+\begin{itemize}
+    \item John MMR: 1200, Jane MMR: 1100
+    \item Prediksi John menang: 0.64 (64\%)
+    \item Hasil: John menang (HasilAsli = 1)
+    \item K-factor John: 20 (pemain intermediate)
+    \item MMR baru John: 1200 + 20 × (1 - 0.64) = 1200 + 7.2 = 1207
+\end{itemize}
+
+\subsubsection{2. Rumus Expected Score (Prediksi Menang)}
+
+\textbf{Rumus:}
+\begin{equation}
+ExpectedScore = \frac{1}{1 + 10^{(MMR_{lawan} - MMR_{kamu})/400}}
+\end{equation}
+
+\textbf{Penjelasan Sederhana:}
+Rumus ini ngitung berapa persen kemungkinan kamu menang berdasarkan beda MMR.
+
+\textbf{Contoh Praktis:}
+\begin{itemize}
+    \item Kamu: MMR 1200, Lawan: MMR 1100
+    \item Beda MMR: 1200 - 1100 = 100 (kamu lebih tinggi)
+    \item Expected Score = 1/(1 + 10^(-100/400)) = 1/(1 + 0.56) = 0.64
+    \item Artinya: 64\% kemungkinan kamu menang
+\end{itemize}
+
+\subsubsection{3. Rumus K-Factor (Seberapa Cepat Rating Berubah)}
+
+\textbf{Logika K-Factor:}
+\begin{itemize}
+    \item \textbf{Player Baru (< 10 match)}: K = 40 (perubahan cepat)
+    \item \textbf{Player Developing (< 30 match)}: K = 30 (masih cepat)
+    \item \textbf{Low Skill (MMR < 1200)}: K = 20 (sedang)
+    \item \textbf{Intermediate (MMR 1200-1800)}: K = 15 (lambat)
+    \item \textbf{High Skill (MMR > 1800)}: K = 10 (sangat lambat)
+\end{itemize}
+
+\textbf{Kenapa Begini?}
+\begin{itemize}
+    \item Player baru: Sistemnya belum tau skill asli, jadi perubahan cepat
+    \item Player expert: Skillnya udah stabil, jadi perubahan lambat
+    \item Skill rendah: Masih banyak ruang improve, jadi perubahan sedang
+\end{itemize}
+
+\subsubsection{4. Rumus Compatibility Score (Kecocokan Pasangan)}
+
+\textbf{Rumus:}
+\begin{equation}
+CompatibilityScore = MMR_{score} \times 0.4 + Level_{score} \times 0.25 + WinRate_{score} \times 0.2 + Wait_{score} \times 0.15
+\end{equation}
+
+\textbf{Contoh Perhitungan:}
+\begin{itemize}
+    \item \textbf{MMR Score}: Beda MMR 80 poin → Score 90 (40\% × 90 = 36)
+    \item \textbf{Level Score}: Same level → Score 100 (25\% × 100 = 25)
+    \item \textbf{Win Rate Score}: Beda win rate 15\% → Score 75 (20\% × 75 = 15)
+    \item \textbf{Waiting Score}: Rata-rata nunggu 45 menit → Score 85 (15\% × 85 = 12.75)
+    \item \textbf{Total}: 36 + 25 + 15 + 12.75 = 88.75 (Very Good Match!)
+\end{itemize}
+
+\subsubsection{5. Rumus MMR Compatibility}
+
+\textbf{Logika Sederhana:}
+\begin{lstlisting}[language=text, caption=MMR Compatibility Logic]
+Beda MMR 0-50 poin   → Score 100 (Perfect!)
+Beda MMR 51-100 poin → Score 90-40 (Bagus)
+Beda MMR 101-200 poin → Score 40-10 (Lumayan)
+Beda MMR >200 poin   → Score 10-0 (Jelek)
+\end{lstlisting}
+
+\textbf{Contoh:}
+\begin{itemize}
+    \item Player A: MMR 1200, Player B: MMR 1250
+    \item Beda MMR: |1200 - 1250| = 50 poin
+    \item Compatibility Score: 100 (Perfect match!)
+\end{itemize}
+
+\subsubsection{6. Rumus Waiting Time Bonus}
+
+\textbf{Logika:}
+Semakin lama nunggu, semakin tinggi prioritas untuk dicarikan lawan.
+
+\begin{lstlisting}[language=text, caption=Waiting Time Bonus Logic]
+Nunggu ≥ 60 menit → Score 100 (Prioritas tertinggi)
+Nunggu 30-60 menit → Score 80-100 (Prioritas tinggi)
+Nunggu 15-30 menit → Score 60-80 (Prioritas sedang)
+Nunggu < 15 menit → Score 40-60 (Prioritas rendah)
+\end{lstlisting}
+
+\subsubsection{7. Rumus Credit Score Penalty}
+
+\textbf{Logika Cancellation:}
+\begin{lstlisting}[language=text, caption=Cancellation Penalty Logic]
+Cancel ≥ 24 jam sebelumnya → -5 poin (Masih wajar)
+Cancel 12-24 jam → -10 poin (Mulai kena)
+Cancel 6-12 jam → -15 poin (Lumayan sakit)
+Cancel 2-6 jam → -20 poin (Sakit banget)
+Cancel < 2 jam → -25 poin (Maksimal penalty)
+\end{lstlisting}
+
+\textbf{Contoh Praktis:}
+\begin{itemize}
+    \item Event badminton jam 19:00
+    \item Kamu cancel jam 17:30 (1.5 jam sebelumnya)
+    \item Credit score kamu: 85 → 85 - 25 = 60
+    \item Sekarang kamu nggak bisa join premium event lagi sampai credit score naik
+\end{itemize}
+
+\subsection{Tips Memahami Rumus-Rumus Ini}
+
+\begin{itemize}
+    \item \textbf{MMR}: Makin tinggi, makin jago. Perubahan bergantung pengalaman.
+    \item \textbf{Compatibility}: Makin tinggi score, makin cocok sebagai lawan.
+    \item \textbf{Credit Score}: Makin tinggi, makin bebas akses fitur premium.
+    \item \textbf{Waiting Time}: Makin lama nunggu, makin prioritas dapat lawan.
+    \item \textbf{K-Factor}: Menentukan seberapa cepat MMR berubah.
+\end{itemize}
+
+\subsection{Skenario Praktis: Step-by-Step Calculation}
+
+Mari kita lihat contoh nyata gimana rumus-rumus ini bekerja dalam satu skenario:
+
+\subsubsection{Skenario: Event Badminton Sore}
+
+\textbf{Setting:}
+\begin{itemize}
+    \item Event badminton jam 19:00
+    \item 4 pemain check-in: Alex, Budi, Citra, Doni
+    \item Sistem harus carikan 2 pasangan yang fair
+\end{itemize}
+
+\textbf{Data Pemain:}
+\begin{table}[H]
+\centering
+\begin{tabular}{|c|c|c|c|c|c|}
+\hline
+\textbf{Nama} & \textbf{MMR} & \textbf{Matches} & \textbf{Win Rate} & \textbf{Credit Score} & \textbf{Check-in} \\
+\hline
+Alex & 1250 & 25 & 65\% & 85 & 18:45 \\
+Budi & 1180 & 15 & 60\% & 90 & 18:50 \\
+Citra & 1200 & 30 & 70\% & 75 & 18:40 \\
+Doni & 1320 & 40 & 75\% & 95 & 18:55 \\
+\hline
+\end{tabular}
+\caption{Data Pemain untuk Matchmaking}
+\end{table}
+
+\textbf{Step 1: Hitung Compatibility Scores}
+
+\textit{Pasangan 1: Alex vs Budi}
+\begin{itemize}
+    \item MMR Diff: |1250 - 1180| = 70 → MMR Score = 85
+    \item Level: Advanced vs Intermediate → Level Score = 75
+    \item Win Rate Diff: |65 - 60| = 5\% → Win Rate Score = 95
+    \item Avg Wait: (15+10)/2 = 12.5 menit → Wait Score = 50
+    \item \textbf{Total}: 85×0.4 + 75×0.25 + 95×0.2 + 50×0.15 = \textbf{79.25}
+\end{itemize}
+
+\textit{Pasangan 2: Alex vs Citra}
+\begin{itemize}
+    \item MMR Diff: |1250 - 1200| = 50 → MMR Score = 100
+    \item Level: Advanced vs Advanced → Level Score = 100
+    \item Win Rate Diff: |65 - 70| = 5\% → Win Rate Score = 95
+    \item Avg Wait: (15+20)/2 = 17.5 menit → Wait Score = 55
+    \item \textbf{Total}: 100×0.4 + 100×0.25 + 95×0.2 + 55×0.15 = \textbf{93.25}
+\end{itemize}
+
+\textit{Pasangan 3: Alex vs Doni}
+\begin{itemize}
+    \item MMR Diff: |1250 - 1320| = 70 → MMR Score = 85
+    \item Level: Advanced vs Expert → Level Score = 75
+    \item Win Rate Diff: |65 - 75| = 10\% → Win Rate Score = 80
+    \item Avg Wait: (15+5)/2 = 10 menit → Wait Score = 45
+    \item \textbf{Total}: 85×0.4 + 75×0.25 + 80×0.2 + 45×0.15 = \textbf{77.5}
+\end{itemize}
+
+\textbf{Step 2: Pilih Pasangan Terbaik}
+
+Ranking berdasarkan compatibility score:
+\begin{enumerate}
+    \item \textbf{Alex vs Citra: 93.25} (TERPILIH!)
+    \item Budi vs Doni: 82.0 (TERPILIH!)
+    \item Alex vs Budi: 79.25
+    \item Alex vs Doni: 77.5
+\end{enumerate}
+
+\textbf{Step 3: Simulasi Hasil Match}
+
+\textit{Match 1: Alex (MMR 1250) vs Citra (MMR 1200)}
+\begin{itemize}
+    \item Expected Score Alex: 1/(1+10^{(1200-1250)/400}) = 0.57 (57\%)
+    \item Expected Score Citra: 1 - 0.57 = 0.43 (43\%)
+    \item Hasil: Alex menang
+    \item K-factor Alex: 15 (intermediate, 25 matches)
+    \item K-factor Citra: 15 (intermediate, 30 matches)
+    \item MMR baru Alex: 1250 + 15×(1-0.57) = 1250 + 6.45 = \textbf{1256}
+    \item MMR baru Citra: 1200 + 15×(0-0.43) = 1200 - 6.45 = \textbf{1194}
+\end{itemize}
+
+\textbf{Step 4: Update Credit Score}
+
+Karena semua pemain datang dan main sampai selesai:
+\begin{itemize}
+    \item Alex: 85 + 2 (completion bonus) = \textbf{87}
+    \item Budi: 90 + 2 = \textbf{92}
+    \item Citra: 75 + 2 = \textbf{77}
+    \item Doni: 95 + 2 = \textbf{97}
+\end{itemize}
+
+\subsubsection{Analisis Hasil}
+
+\textbf{Kenapa Alex vs Citra Dipilih?}
+\begin{itemize}
+    \item MMR sangat dekat (50 poin) → Perfect compatibility
+    \item Same skill level (Advanced)
+    \item Win rate hampir sama
+    \item Citra udah nunggu lebih lama
+\end{itemize}
+
+\textbf{Pembelajaran dari Skenario:}
+\begin{itemize}
+    \item Sistem prioritaskan keseimbangan MMR dan level
+    \item Waiting time kasih bonus ke yang udah lama nunggu
+    \item Perubahan MMR proporsional dengan expected vs actual result
+    \item Credit score naik untuk semua yang complete event
+\end{itemize}
+
+\subsection{Sistem Antrian yang Fair}
+
+Sistem antrian di SportPWA diatur berdasarkan beberapa faktor:
+
+\begin{enumerate}
+    \item \textbf{Waiting Time}: Yang udah lama nunggu dapat prioritas
+    \item \textbf{Premium Status}: Member premium dapat sedikit prioritas
+    \item \textbf{MMR Balance}: Sistem coba buat match yang seimbang
+    \item \textbf{Credit Score}: Score tinggi dapat preferensi
+\end{enumerate}
+
+\begin{lstlisting}[language=PHP, caption=Get Queue Info di MatchmakingService.php]
+public function getQueueInfo(Event $event)
+{
+    $participants = $this->getEligibleParticipants($event);
+    $activeMatches = MatchHistory::where('event_id', $event->id)
+        ->whereIn('match_status', ['scheduled', 'ongoing'])
+        ->count();
+
+    $waitingPlayers = $participants->filter(function($participant) {
+        return !$participant->user->hasActiveMatch();
+    });
+
+    return [
+        'total_participants' => $participants->count(),
+        'active_matches' => $activeMatches,
+        'waiting_players' => $waitingPlayers->count(),
+        'can_create_matches' => $waitingPlayers->count() >= 2,
+        'queue_list' => $waitingPlayers->map(function($participant) {
+            return [
+                'user' => $participant->user,
+                'waiting_since' => $participant->confirmed_at ?? $participant->created_at,
+                'waiting_minutes' => Carbon::now()->diffInMinutes($participant->confirmed_at ?? $participant->created_at)
+            ];
+        })->sortByDesc('waiting_minutes')->values()
+    ];
+}
+\end{lstlisting}
+
+\subsection{Host Management Tools}
+
+Host punya beberapa tools untuk mengatur court:
+
+\begin{lstlisting}[language=PHP, caption=Court Assignment di MatchmakingController.php]
+public function assignCourt(Request $request, $eventId)
+{
+    $validator = Validator::make($request->all(), [
+        'court_number' => 'required|integer|min:1|max:20',
+        'player1_id' => 'required|exists:users,id',
+        'player2_id' => 'required|exists:users,id|different:player1_id',
+    ]);
+
+    $event = Event::findOrFail($eventId);
+    $user = Auth::user();
+
+    // Cuma host yang bisa assign court
+    if ($event->host_id !== $user->id && !$user->hasRole('admin')) {
+        return response()->json([
+            'status' => 'error',
+            'message' => 'Hanya host yang dapat mengatur court.'
+        ], 403);
+    }
+
+    $result = $this->courtManagementService->assignCourt(
+        $event,
+        $request->court_number,
+        $request->player1_id,
+        $request->player2_id,
+        $user->id
+    );
+
+    return response()->json([
+        'status' => $result['success'] ? 'success' : 'error',
+        'message' => $result['message'],
+        'data' => $result['success'] ? ['match' => $result['match']] : null
+    ]);
+}
+\end{lstlisting}
+
+\section{API Integration - Cara Pakai dari Frontend}
+
+\subsection{Key API Endpoints yang Penting}
+
+Ini beberapa API endpoint utama yang dipakai frontend:
+
+\begin{lstlisting}[language=bash, caption=API Endpoints Utama]
+# Event Management
+POST /api/events/{eventId}/join          # Join event
+DELETE /api/events/{eventId}/leave       # Leave event
+POST /api/events/{eventId}/check-in/{participantId} # Check-in
+
+# Matchmaking
+POST /api/matchmaking/{eventId}/fair-matches # Buat fair matches
+GET /api/matchmaking/{eventId}/status    # Status matchmaking
+
+# Court Management
+GET /api/matchmaking/{eventId}/court-status # Status court
+POST /api/matchmaking/{eventId}/assign-court # Assign court
+POST /api/matchmaking/{eventId}/override-player # Override player
+
+# Credit Score
+GET /api/credit-score                    # Liat credit score
+GET /api/credit-score/preview-cancellation/{eventId} # Preview penalty
+\end{lstlisting}
+
+\subsection{Contoh Response API}
+
+\begin{lstlisting}[language=JSON, caption=Response Fair Matchmaking API]
+{
+    "status": "success",
+    "message": "Fair matchmaking berhasil dibuat!",
+    "data": {
+        "event_id": 123,
+        "event_title": "Badminton Sore Hari",
+        "algorithm_used": "Fair Matchmaking Algorithm v2.0",
+        "total_matches": 3,
+        "matched_players": 6,
+        "waiting_players": 2,
+        "matches": [
+            {
+                "id": 456,
+                "player1": {
+                    "id": 1,
+                    "name": "John Doe",
+                    "mmr": 1200
+                },
+                "player2": {
+                    "id": 2,
+                    "name": "Jane Smith", 
+                    "mmr": 1180
+                },
+                "compatibility_score": {
+                    "total": 92.5,
+                    "details": {
+                        "mmr_score": 95,
+                        "level_score": 100,
+                        "win_rate_score": 85,
+                        "waiting_time_score": 80
+                    }
+                },
+                "court_number": 1,
+                "status": "scheduled"
+            }
+        ]
+    }
+}
+\end{lstlisting}
+
+\section{Tips dan Best Practices}
+
+\subsection{Untuk Players}
+
+\begin{itemize}
+    \item \textbf{Jaga Credit Score}: Usahakan di atas 60 buat akses full
+    \item \textbf{Cancel dengan Bijak}: Cancel minimal 24 jam sebelumnya
+    \item \textbf{Datang Tepat Waktu}: Check-in sesuai jadwal
+    \item \textbf{Kasih Rating Fair}: Rating yang jujur membantu sistem
+    \item \textbf{Bermain Sportif}: Good sportsmanship = rating bagus
+\end{itemize}
+
+\subsection{Untuk Hosts}
+
+\begin{itemize}
+    \item \textbf{Gunakan Fair Matchmaking}: Biar match lebih seimbang
+    \item \textbf{Override Seperlunya}: Jangan asal override premium users
+    \item \textbf{Manage Queue}: Perhatikan yang udah lama nunggu
+    \item \textbf{Check-in Tertib}: Pastikan semua peserta check-in
+    \item \textbf{Rating System}: Ingatkan players untuk kasih rating
+\end{itemize}
+
+\subsection{Untuk Developers}
+
+\begin{itemize}
+    \item \textbf{Database Transactions}: Selalu pakai DB transaction untuk matchmaking
+    \item \textbf{Error Handling}: Comprehensive error handling di semua service
+    \item \textbf{Logging}: Log semua aktivitas penting untuk debugging
+    \item \textbf{Caching}: Cache hasil compatibility calculation
+    \item \textbf{Real-time Updates}: Pakai websockets untuk update live
+\end{itemize}
+
+\section{Troubleshooting - Masalah yang Sering Muncul}
+
+\subsection{Masalah Matchmaking}
+
+\textbf{Q: Kenapa nggak bisa buat match?}\\
+A: Cek minimal 2 peserta yang eligible dan nggak lagi main
+
+\textbf{Q: Match nggak balance?}\\
+A: Adjust skill tolerance di parameter matchmaking
+
+\textbf{Q: Premium user kena override terus?}\\
+A: Premium user harusnya protected dari arbitrary switching
+
+\subsection{Masalah Credit Score}
+
+\textbf{Q: Credit score turun terus?}\\
+A: Cek history penalty, mungkin sering cancel atau no-show
+
+\textbf{Q: Nggak bisa join event?}\\
+A: Credit score harus minimal 40 untuk join event
+
+\textbf{Q: Bonus nggak masuk?}\\
+A: Cek udah check-in dan complete event atau belum
+
+\subsection{Masalah MMR}
+
+\textbf{Q: MMR nggak update setelah menang?}\\
+A: Cek match sudah di-record sebagai completed
+
+\textbf{Q: MMR turun banyak setelah kalah?}\\
+A: Normal jika lawan MMR-nya jauh lebih rendah
+
+\section{Kesimpulan}
+
+SportPWA Matchmaking System adalah solusi lengkap untuk:
+
+\begin{enumerate}
+    \item \textbf{Fair Play}: Algoritma yang smart buat match seimbang
+    \item \textbf{Behavior Management}: Credit score yang mendorong perilaku baik
+    \item \textbf{Skill Tracking}: MMR system yang akurat dan fair
+    \item \textbf{User Experience}: Flow yang smooth dari join sampai finish
+    \item \textbf{Scalability}: Architecture yang bisa handle growth
+\end{enumerate}
+
+Sistem ini udah terintegrasi dengan baik di Laravel backend dan React frontend, memberikan pengalaman yang smooth untuk semua user - dari player casual sampai tournament organizer.
+
+\vspace{1cm}
+
+\textit{Dokumen ini akan terus diupdate seiring dengan perkembangan SportPWA. Happy playing! 🏸🎾⚽}
+
+\end{document}

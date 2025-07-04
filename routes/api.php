@@ -17,6 +17,9 @@ use App\Http\Controllers\Api\AdminController;
 use App\Http\Controllers\Api\ReportController;
 use App\Http\Controllers\Api\MatchmakingController;
 use App\Http\Controllers\Api\VenueController;
+use App\Http\Controllers\Api\HostController;
+use App\Http\Controllers\Api\FriendController;
+use App\Http\Controllers\Api\PrivateMessageController;
 
 Route::get('/user', function (Request $request) {
     return $request->user();
@@ -140,6 +143,12 @@ Route::middleware('auth:sanctum')->group(function () {
         // Community icon management (host only)
         Route::post('/{community}/upload-icon', [CommunityController::class, 'uploadIcon']);
         Route::delete('/{community}/delete-icon', [CommunityController::class, 'deleteIcon']);
+
+        // Member level and ranking routes
+        Route::patch('/{community}/members/{user}/level', [CommunityController::class, 'updateMemberLevel']);
+        Route::post('/{community}/members/{user}/points', [CommunityController::class, 'addMemberPoints']);
+        Route::get('/{community}/rankings', [CommunityController::class, 'getMemberRankings']);
+        Route::post('/{community}/rankings/refresh', [CommunityController::class, 'refreshRankings']);
     });
 
     // Notifications routes
@@ -203,22 +212,22 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/{sport}/communities', [SportController::class, 'getCommunities']);
     });
 
-    // Location & Geo Services routes
+    // Location Routes
     Route::prefix('location')->group(function () {
-        // Preferred Areas Management
+        // Existing routes
         Route::get('/preferred-areas', [LocationController::class, 'getUserPreferredAreas']);
         Route::post('/preferred-areas', [LocationController::class, 'addPreferredArea']);
         Route::put('/preferred-areas/{area}', [LocationController::class, 'updatePreferredArea']);
         Route::delete('/preferred-areas/{area}', [LocationController::class, 'deletePreferredArea']);
-        
-        // Location-based Search (200km radius)
+
+        // New location tracking routes
+        Route::post('/location/current', [LocationController::class, 'updateCurrentLocation']);
+        Route::get('/location/current', [LocationController::class, 'getCurrentLocation']);
+
+        // Existing search routes
         Route::post('/search/events', [LocationController::class, 'searchEventsByLocation']);
         Route::post('/search/communities', [LocationController::class, 'searchCommunitiesByLocation']);
-        
-        // Distance Calculation
         Route::post('/calculate-distance', [LocationController::class, 'calculateDistance']);
-        
-        // Events in Preferred Areas
         Route::get('/preferred-areas/events', [LocationController::class, 'getEventsInPreferredAreas']);
     });
 
@@ -257,24 +266,6 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/activities', [AdminController::class, 'getAdminActivities']);
     });
 
-    // Matchmaking System
-    Route::group(['middleware' => 'auth:sanctum'], function () {
-            Route::get('matchmaking/{eventId}', [MatchmakingController::class, 'getMatchmakingStatus']);
-    Route::post('matchmaking/{eventId}/generate', [MatchmakingController::class, 'generateEventMatchmaking']);
-    Route::post('matchmaking/{eventId}/save', [MatchmakingController::class, 'saveMatchmaking']);
-    Route::post('matchmaking/{eventId}/fair-matches', [MatchmakingController::class, 'createFairMatches']);
-    
-    // Event matchmaking status for participants
-    Route::get('matchmaking/{eventId}/event-matchmaking-status', [MatchmakingController::class, 'getEventMatchmakingStatus']);
-    
-    // Court Management routes
-    Route::get('matchmaking/{eventId}/court-status', [MatchmakingController::class, 'getCourtStatus']);
-    Route::post('matchmaking/{eventId}/assign-court', [MatchmakingController::class, 'assignCourt']);
-    Route::post('matchmaking/{eventId}/override-player', [MatchmakingController::class, 'overridePlayer']);
-    Route::post('matchmaking/{eventId}/start-match/{matchId}', [MatchmakingController::class, 'startMatch']);
-    Route::get('matchmaking/{eventId}/next-round-suggestions', [MatchmakingController::class, 'getNextRoundSuggestions']);
-    });
-
     // Venue Management
     Route::group(['middleware' => 'auth:sanctum'], function () {
         // Public venue routes (authenticated users)
@@ -292,36 +283,100 @@ Route::middleware('auth:sanctum')->group(function () {
     // Friend System routes
     Route::prefix('friends')->group(function () {
         // Friends list and management
-        Route::get('/', [App\Http\Controllers\Api\FriendController::class, 'getFriends']);
-        Route::delete('/{friendId}', [App\Http\Controllers\Api\FriendController::class, 'removeFriend']);
+        Route::get('/', [FriendController::class, 'getFriends']);
+        Route::delete('/{friendId}', [FriendController::class, 'removeFriend']);
         
         // Friend requests
-        Route::post('/request', [App\Http\Controllers\Api\FriendController::class, 'sendFriendRequest']);
-        Route::get('/requests/pending', [App\Http\Controllers\Api\FriendController::class, 'getPendingRequests']);
-        Route::get('/requests/sent', [App\Http\Controllers\Api\FriendController::class, 'getSentRequests']);
-        Route::post('/requests/{requestId}/accept', [App\Http\Controllers\Api\FriendController::class, 'acceptFriendRequest']);
-        Route::post('/requests/{requestId}/reject', [App\Http\Controllers\Api\FriendController::class, 'rejectFriendRequest']);
-        Route::delete('/requests/{requestId}', [App\Http\Controllers\Api\FriendController::class, 'cancelFriendRequest']);
+        Route::post('/request', [FriendController::class, 'sendFriendRequest']);
+        Route::get('/requests/pending', [FriendController::class, 'getPendingRequests']);
+        Route::get('/requests/sent', [FriendController::class, 'getSentRequests']);
+        Route::post('/requests/{requestId}/accept', [FriendController::class, 'acceptFriendRequest']);
+        Route::post('/requests/{requestId}/reject', [FriendController::class, 'rejectFriendRequest']);
+        Route::delete('/requests/{requestId}', [FriendController::class, 'cancelFriendRequest']);
         
         // Friendship status and search
-        Route::get('/status/{userId}', [App\Http\Controllers\Api\FriendController::class, 'getFriendshipStatus']);
-        Route::get('/search', [App\Http\Controllers\Api\FriendController::class, 'searchUsers']);
+        Route::get('/status/{userId}', [FriendController::class, 'getFriendshipStatus']);
+        Route::get('/search', [FriendController::class, 'searchUsers']);
     });
 
     // Private Messaging routes
     Route::prefix('messages')->group(function () {
         // Conversations
-        Route::get('/conversations', [App\Http\Controllers\Api\PrivateMessageController::class, 'getConversations']);
-        Route::get('/conversations/{userId}', [App\Http\Controllers\Api\PrivateMessageController::class, 'getConversation']);
-        Route::delete('/conversations/{userId}', [App\Http\Controllers\Api\PrivateMessageController::class, 'deleteConversation']);
+        Route::get('/conversations', [PrivateMessageController::class, 'getConversations']);
+        Route::get('/conversations/{userId}', [PrivateMessageController::class, 'getConversation']);
+        Route::delete('/conversations/{userId}', [PrivateMessageController::class, 'deleteConversation']);
         
         // Messages
-        Route::post('/send', [App\Http\Controllers\Api\PrivateMessageController::class, 'sendMessage']);
-        Route::post('/{messageId}/read', [App\Http\Controllers\Api\PrivateMessageController::class, 'markAsRead']);
-        Route::post('/read-all/{userId}', [App\Http\Controllers\Api\PrivateMessageController::class, 'markAllAsRead']);
-        Route::delete('/{messageId}', [App\Http\Controllers\Api\PrivateMessageController::class, 'deleteMessage']);
+        Route::post('/send', [PrivateMessageController::class, 'sendMessage']);
+        Route::post('/{messageId}/read', [PrivateMessageController::class, 'markAsRead']);
+        Route::post('/read-all/{userId}', [PrivateMessageController::class, 'markAllAsRead']);
+        Route::delete('/{messageId}', [PrivateMessageController::class, 'deleteMessage']);
         
         // Unread count
-        Route::get('/unread-count', [App\Http\Controllers\Api\PrivateMessageController::class, 'getUnreadCount']);
+        Route::get('/unread-count', [PrivateMessageController::class, 'getUnreadCount']);
+    });
+
+    // Host Routes
+    Route::middleware(['auth:sanctum', 'role:host'])->prefix('host')->group(function () {
+        Route::get('/dashboard/stats', [HostController::class, 'getDashboardStats']);
+        Route::get('/analytics', [HostController::class, 'getHostAnalytics']);
+    });
+
+    // Host Matchmaking Routes (legacy - kept for compatibility)
+    Route::middleware(['auth:sanctum', 'role:host'])->prefix('host/matchmaking')->group(function () {
+        Route::get('/{eventId}/participants', [MatchmakingController::class, 'getEventParticipants']);
+        Route::get('/{eventId}/matches', [MatchmakingController::class, 'getEventMatches']);
+        Route::post('/{eventId}/override', [MatchmakingController::class, 'overrideMatch']);
+        Route::post('/{eventId}/matches/{matchId}/lock', [MatchmakingController::class, 'toggleMatchLock']);
+    });
+
+    // Host Community Player Management Routes
+    Route::middleware(['auth:sanctum', 'role:host'])->prefix('host/communities')->group(function () {
+        Route::get('/{communityId}/players', [CommunityController::class, 'getCommunityPlayers']);
+        Route::post('/{communityId}/players/{playerId}/level', [CommunityController::class, 'updatePlayerLevel']);
+        Route::post('/{communityId}/players/{playerId}/status', [CommunityController::class, 'updatePlayerStatus']);
+    });
+
+    // Host Management Routes
+    Route::middleware(['auth:sanctum'])->group(function () {
+        // Host Dashboard
+        Route::get('/host/dashboard/stats', 'Api\HostController@getDashboardStats');
+        Route::get('/host/analytics', 'Api\HostController@getHostAnalytics');
+        
+        // Venue Management
+        Route::get('/host/venues', 'Api\HostController@getVenues');
+        Route::post('/host/venues', 'Api\HostController@createVenue');
+        Route::put('/host/venues/{venueId}', 'Api\HostController@updateVenue');
+        Route::delete('/host/venues/{venueId}', 'Api\HostController@deleteVenue');
+        Route::get('/host/venues/{venueId}/stats', 'Api\HostController@getVenueStats');
+        Route::get('/host/venues/{venueId}/matchmaking-status', 'Api\HostController@getVenueMatchmakingStatus');
+        
+        // Court Management
+        Route::get('/host/venues/{venue}/courts', 'Api\HostController@getCourts');
+        Route::put('/host/courts/{courtId}/status', 'Api\HostController@updateCourtStatus');
+        Route::post('/host/courts/{courtId}/assign-match', 'Api\HostController@assignMatch');
+        
+        // Community Management
+        Route::get('/host/communities/{communityId}/stats', 'Api\HostController@getCommunityStats');
+        Route::put('/host/communities/{communityId}/settings', 'Api\HostController@updateCommunitySettings');
+        Route::post('/host/communities/{communityId}/members/{memberId}/manage', 'Api\HostController@manageMemberRequest');
+        
+        // Guest Player Management
+        Route::get('/host/events/{event}/guest-players', 'Api\HostController@listGuestPlayers');
+        Route::post('/host/events/{event}/guest-players', 'Api\HostController@addGuestPlayer');
+        Route::put('/host/events/{event}/guest-players/{guestPlayer}', 'Api\HostController@updateGuestPlayer');
+        Route::delete('/host/events/{event}/guest-players/{guestPlayer}', 'Api\HostController@removeGuestPlayer');
+
+        // QR Code Check-in
+        Route::post('/host/events/{event}/check-in/qr', 'Api\HostController@processQRCheckIn');
+        Route::post('/host/events/{event}/generate-qr', 'Api\HostController@generateCheckInQR');
+    });
+
+    // Matchmaking Management (New standardized routes using Event model dependency injection)
+    Route::middleware(['auth:sanctum'])->group(function () {
+        Route::get('/matchmaking/{event}/status', [MatchmakingController::class, 'getStatus']);
+        Route::post('/matchmaking/{event}/fair-matches', [MatchmakingController::class, 'createFairMatches']);
+        Route::post('/matchmaking/{event}/override-player', [MatchmakingController::class, 'overridePlayer']);
+        Route::post('/matchmaking/{event}/assign-court', [MatchmakingController::class, 'assignCourt']);
     });
 }); 

@@ -17,6 +17,10 @@ return new class extends Migration
             $table->foreignId('user_id')->constrained('users')->onDelete('cascade');
             $table->enum('role', ['member', 'admin', 'moderator'])->default('member');
             $table->enum('status', ['active', 'pending', 'suspended', 'banned'])->default('active');
+            $table->enum('level', ['beginner', 'intermediate', 'advanced', 'expert', 'professional'])->default('beginner');
+            $table->integer('activity_score')->default(0);
+            $table->integer('level_points')->default(0);
+            $table->integer('ranking')->nullable();
             $table->timestamp('joined_at')->useCurrent();
             $table->timestamp('last_activity_at')->nullable();
             $table->text('notes')->nullable(); // Admin notes about member
@@ -28,6 +32,9 @@ return new class extends Migration
             $table->index(['status']);
             $table->index(['role']);
             $table->index(['joined_at']);
+            $table->index(['community_id', 'ranking']);
+            $table->index(['community_id', 'level']);
+            $table->index(['user_id', 'community_id']);
         });
     }
 

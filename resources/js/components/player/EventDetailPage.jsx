@@ -3,6 +3,8 @@ import { HiArrowLeft, HiLocationMarker, HiCalendar, HiClock, HiUsers, HiStar, Hi
 import { HiUserGroup, HiEye } from 'react-icons/hi2';
 import QRCode from 'qrcode';
 import { getUserIdFromToken } from '../../utils/auth';
+import DistanceDisplay from '../common/DistanceDisplay';
+import LocationPicker from '../common/LocationPicker';
 
 const EventDetailPage = ({ eventId, userToken, onNavigate, onBack }) => {
     const [event, setEvent] = useState(null);
@@ -16,6 +18,7 @@ const EventDetailPage = ({ eventId, userToken, onNavigate, onBack }) => {
     const [userQR, setUserQR] = useState(null);
     const [qrCodeUrl, setQrCodeUrl] = useState(null);
     const [isHost, setIsHost] = useState(false);
+    const [showMap, setShowMap] = useState(false);
 
     useEffect(() => {
         if (eventId && userToken) {
@@ -348,6 +351,38 @@ const EventDetailPage = ({ eventId, userToken, onNavigate, onBack }) => {
                                 <span>Komunitas: {event.community.name}</span>
                             </div>
                         )}
+
+                        {event.latitude && event.longitude && (
+                            <div className="mb-4">
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                        <DistanceDisplay 
+                                            targetLat={event.latitude} 
+                                            targetLng={event.longitude}
+                                            showRealTime={true}
+                                        />
+                                        <span className="text-sm text-gray-600">{event.address}</span>
+                                    </div>
+                                    <button
+                                        onClick={() => setShowMap(!showMap)}
+                                        className="text-primary hover:text-primary-dark"
+                                    >
+                                        {showMap ? 'Hide Map' : 'Show Map'}
+                                    </button>
+                                </div>
+
+                                {showMap && (
+                                    <div className="mt-4">
+                                        <LocationPicker
+                                            initialLocation={{ lat: event.latitude, lng: event.longitude }}
+                                            showCurrentLocation={true}
+                                            height="300px"
+                                            onLocationSelect={() => {}} // Read-only
+                                        />
+                                    </div>
+                                )}
+                            </div>
+                        )}
                     </div>
 
                     {/* Action Buttons */}
@@ -373,13 +408,13 @@ const EventDetailPage = ({ eventId, userToken, onNavigate, onBack }) => {
                                             </button>
                                         )}
                                         {!isHost && (
-                                            <button
-                                                onClick={handleLeaveEvent}
-                                                disabled={isLeaving}
-                                                className="flex-1 bg-red-500 text-white py-3 rounded-lg font-medium hover:bg-red-600 transition-colors disabled:opacity-50"
-                                            >
-                                                {isLeaving ? 'Keluar...' : 'Keluar'}
-                                            </button>
+                                        <button
+                                            onClick={handleLeaveEvent}
+                                            disabled={isLeaving}
+                                            className="flex-1 bg-red-500 text-white py-3 rounded-lg font-medium hover:bg-red-600 transition-colors disabled:opacity-50"
+                                        >
+                                            {isLeaving ? 'Keluar...' : 'Keluar'}
+                                        </button>
                                         )}
                                     </>
                                 )}
@@ -435,7 +470,7 @@ const EventDetailPage = ({ eventId, userToken, onNavigate, onBack }) => {
                                                 userParticipation?.status === 'checked_in' ? '🎫 Sudah Check-in' : 
                                                 userParticipation?.status === 'registered' ? '📝 Terdaftar' :
                                                 '👥 Bergabung'}
-                                    </p>
+                            </p>
                                     {userParticipation?.queue_position && (
                                         <p className="text-green-600 text-sm mt-1">
                                             Posisi antrian: #{userParticipation.queue_position}

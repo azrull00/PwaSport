@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { HiUser, HiChatAlt2, HiX } from 'react-icons/hi';
 
 const FriendsPage = ({ userToken, onNavigate, onStartPrivateChat }) => {
     const [activeTab, setActiveTab] = useState('friends');
@@ -214,42 +215,43 @@ const FriendsPage = ({ userToken, onNavigate, onStartPrivateChat }) => {
     };
 
     const FriendCard = ({ friend, onRemove }) => (
-        <div className="bg-white rounded-lg shadow-md p-4 hover:shadow-lg transition-shadow">
-            <div className="flex items-center space-x-4">
-                <div className="w-12 h-12 bg-blue-500 rounded-full flex items-center justify-center text-white font-bold">
-                    {friend.name.charAt(0).toUpperCase()}
-                </div>
-                <div className="flex-1">
-                    <h3 className="font-semibold text-gray-900">{friend.name}</h3>
-                    <p className="text-sm text-gray-600">{friend.email}</p>
-                    {friend.subscription_tier === 'premium' && (
-                        <span className="inline-block bg-yellow-100 text-yellow-800 text-xs px-2 py-1 rounded-full mt-1">
-                            ⭐ Premium
-                        </span>
+        <div className="bg-white rounded-lg shadow-sm p-4 mb-3 flex items-center justify-between">
+            <div className="flex items-center flex-1">
+                <div className="w-12 h-12 rounded-full bg-gray-200 overflow-hidden">
+                    {friend.profile_picture_url ? (
+                        <img 
+                            src={friend.profile_picture_url} 
+                            alt={friend.name} 
+                            className="w-full h-full object-cover"
+                        />
+                    ) : (
+                        <div className="w-full h-full flex items-center justify-center bg-blue-100 text-blue-600">
+                            <HiUser className="w-6 h-6" />
+                        </div>
                     )}
                 </div>
-                <div className="text-right">
-                    <p className="text-xs text-gray-500">
-                        Berteman sejak: {formatDate(friend.friendship_date)}
+                <div className="ml-3 flex-1">
+                    <h3 className="font-semibold text-gray-900">{friend.name}</h3>
+                    <p className="text-sm text-gray-500">
+                        {friend.city || 'Location not set'}
                     </p>
-                    <p className="text-xs text-gray-500">
-                        {friend.mutual_friends_count} teman bersama
-                    </p>
-                    <div className="flex space-x-2 mt-2">
-                        <button
-                            onClick={() => onStartPrivateChat && onStartPrivateChat(friend.id)}
-                            className="bg-primary text-white px-3 py-1 rounded text-sm hover:bg-primary-dark transition-colors"
-                        >
-                            Chat
-                        </button>
-                        <button
-                            onClick={() => onRemove(friend.id)}
-                            className="text-red-600 hover:text-red-800 text-sm px-2 py-1"
-                        >
-                            Hapus
-                        </button>
-                    </div>
                 </div>
+            </div>
+            <div className="flex items-center space-x-2">
+                <button
+                    onClick={() => onStartPrivateChat(friend.id)}
+                    className="p-2 text-blue-600 hover:bg-blue-50 rounded-full transition-colors"
+                    title="Chat with friend"
+                >
+                    <HiChatAlt2 className="w-5 h-5" />
+                </button>
+                <button
+                    onClick={() => onRemove(friend.id)}
+                    className="p-2 text-red-600 hover:bg-red-50 rounded-full transition-colors"
+                    title="Remove friend"
+                >
+                    <HiX className="w-5 h-5" />
+                </button>
             </div>
         </div>
     );

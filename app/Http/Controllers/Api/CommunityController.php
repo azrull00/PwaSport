@@ -13,14 +13,21 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 use App\Models\Event;
 use App\Models\EventParticipant;
+use App\Services\CommunityRankingService;
+use App\Models\User;
+use App\Models\CommunityMember;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\Activity;
 
 class CommunityController extends Controller
 {
     protected $notificationService;
+    protected $rankingService;
 
-    public function __construct(EmailNotificationService $notificationService)
+    public function __construct(EmailNotificationService $notificationService, CommunityRankingService $rankingService)
     {
         $this->notificationService = $notificationService;
+        $this->rankingService = $rankingService;
     }
 
     /**
@@ -873,6 +880,253 @@ class CommunityController extends Controller
                 'status' => 'error',
                 'message' => 'Terjadi kesalahan saat keluar dari komunitas.',
                 'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    public function updateMemberLevel(Request $request, Community $community, User $user)
+    {
+        $this->authorize('manageMemberLevels', $community);
+
+        $request->validate([
+            'level' => 'required|string|in:beginner,intermediate,advanced,expert,professional',
+        ]);
+
+        $member = $community->members()->where('user_id', $user->id)->firstOrFail();
+        
+        if ($this->rankingService->updateMemberLevel($member, $request->level)) {
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Member level updated successfully',
+                'data' => [
+                    'member' => $member->fresh()
+                ]
+            ]);
+        }
+
+        return response()->json([
+            'status' => 'error',
+            'message' => 'Failed to update member level'
+        ], 500);
+    }
+
+    public function addMemberPoints(Request $request, Community $community, User $user)
+    {
+        $this->authorize('manageMemberLevels', $community);
+
+        $request->validate([
+            'points' => 'required|integer|min:1|max:100',
+            'reason' => 'required|string|max:255'
+        ]);
+
+        $member = $community->members()->where('user_id', $user->id)->firstOrFail();
+        
+        if ($this->rankingService->addLevelPoints($member, $request->points)) {
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Level points added successfully',
+                'data' => [
+                    'member' => $member->fresh()
+                ]
+            ]);
+        }
+
+        return response()->json([
+            'status' => 'error',
+            'message' => 'Failed to add level points'
+        ], 500);
+    }
+
+    public function getMemberRankings(Community $community)
+    {
+        $members = $community->members()
+            ->where('status', 'active')
+            ->with(['user:id,name,profile_picture_url'])
+            ->orderBy('ranking')
+            ->paginate(20);
+
+        return response()->json([
+            'status' => 'success',
+            'data' => [
+                'members' => $members
+            ]
+        ]);
+    }
+
+    public function refreshRankings(Community $community)
+    {
+        $this->authorize('manageCommunity', $community);
+
+        if ($this->rankingService->updateMemberRankings($community)) {
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Rankings updated successfully'
+            ]);
+        }
+
+        return response()->json([
+            'status' => 'error',
+            'message' => 'Failed to update rankings'
+        ], 500);
+    }
+
+    public function getCommunityPlayers($communityId)
+    {
+        $user = Auth::user();
+        $community = Community::findOrFail($communityId);
+
+        // Check if user is host
+        if ($community->host_id !== $user->id && !$user->hasRole('admin')) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Unauthorized'
+            ], 403);
+        }
+
+        $players = CommunityMember::with(['user', 'user.sportRatings'])
+            ->where('community_id', $communityId)
+            ->get()
+            ->map(function ($member) use ($community) {
+                $user = $member->user;
+                $sportRating = $user->sportRatings()
+                    ->where('sport_id', $community->sport_id)
+                    ->first();
+
+                $eventsParticipated = EventParticipant::whereHas('event', function ($query) use ($communityId) {
+                    $query->where('community_id', $communityId);
+                })
+                ->where('user_id', $user->id)
+                ->count();
+
+                return [
+                    'id' => $user->id,
+                    'name' => $user->name,
+                    'profile_picture' => $user->profile_picture,
+                    'level' => $member->level,
+                    'status' => $member->status,
+                    'joined_at' => $member->created_at,
+                    'events_participated' => $eventsParticipated,
+                    'win_rate' => $sportRating ? $sportRating->win_rate : 0,
+                    'rating' => $sportRating ? $sportRating->mmr : 1000
+                ];
+            });
+
+        return response()->json([
+            'status' => 'success',
+            'data' => [
+                'players' => $players
+            ]
+        ]);
+    }
+
+    public function updatePlayerLevel(Request $request, $communityId, $playerId)
+    {
+        $user = Auth::user();
+        $community = Community::findOrFail($communityId);
+
+        // Check if user is host
+        if ($community->host_id !== $user->id && !$user->hasRole('admin')) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Unauthorized'
+            ], 403);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'level' => 'required|in:beginner,intermediate,advanced,expert,professional'
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Invalid level',
+                'errors' => $validator->errors()
+            ], 422);
+        }
+
+        try {
+            $member = CommunityMember::where('community_id', $communityId)
+                ->where('user_id', $playerId)
+                ->firstOrFail();
+
+            $member->level = $request->level;
+            $member->save();
+
+            // Log the level change
+            activity()
+                ->performedOn($member)
+                ->causedBy($user)
+                ->withProperties([
+                    'old_level' => $member->getOriginal('level'),
+                    'new_level' => $request->level
+                ])
+                ->log('player.level.updated');
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Player level updated successfully'
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Failed to update player level'
+            ], 500);
+        }
+    }
+
+    public function updatePlayerStatus(Request $request, $communityId, $playerId)
+    {
+        $user = Auth::user();
+        $community = Community::findOrFail($communityId);
+
+        // Check if user is host
+        if ($community->host_id !== $user->id && !$user->hasRole('admin')) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Unauthorized'
+            ], 403);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'status' => 'required|in:active,inactive,suspended'
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Invalid status',
+                'errors' => $validator->errors()
+            ], 422);
+        }
+
+        try {
+            $member = CommunityMember::where('community_id', $communityId)
+                ->where('user_id', $playerId)
+                ->firstOrFail();
+
+            $member->status = $request->status;
+            $member->save();
+
+            // Log the status change
+            activity()
+                ->performedOn($member)
+                ->causedBy($user)
+                ->withProperties([
+                    'old_status' => $member->getOriginal('status'),
+                    'new_status' => $request->status
+                ])
+                ->log('player.status.updated');
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Player status updated successfully'
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Failed to update player status'
             ], 500);
         }
     }

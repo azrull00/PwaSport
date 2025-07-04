@@ -10,9 +10,17 @@ use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
+use App\Services\LocationTrackingService;
 
 class LocationController extends Controller
 {
+    protected $locationTrackingService;
+
+    public function __construct(LocationTrackingService $locationTrackingService)
+    {
+        $this->locationTrackingService = $locationTrackingService;
+    }
+
     /**
      * Get user's preferred areas
      */
@@ -557,5 +565,80 @@ class LocationController extends Controller
     private function getMaxAreasAllowed($user)
     {
         return $user->subscription_tier === 'premium' ? 999 : 3; // 3 for free, unlimited for premium
+    }
+
+    /**
+     * Update user's current location
+     */
+    public function updateCurrentLocation(Request $request)
+    {
+        try {
+            $validator = Validator::make($request->all(), [
+                'latitude' => 'required|numeric|between:-90,90',
+                'longitude' => 'required|numeric|between:-180,180',
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Data tidak valid',
+                    'errors' => $validator->errors()
+                ], 422);
+            }
+
+            $user = Auth::user();
+            $result = $this->locationTrackingService->updateUserLocation(
+                $user,
+                $request->latitude,
+                $request->longitude
+            );
+
+            if (!$result['success']) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => $result['message']
+                ], 500);
+            }
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Lokasi berhasil diperbarui'
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Gagal memperbarui lokasi: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Get user's current location
+     */
+    public function getCurrentLocation()
+    {
+        try {
+            $user = Auth::user();
+            $location = $this->locationTrackingService->getUserLocation($user);
+
+            if (!$location) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Lokasi tidak tersedia'
+                ], 404);
+            }
+
+            return response()->json([
+                'status' => 'success',
+                'data' => $location
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Gagal mengambil lokasi: ' . $e->getMessage()
+            ], 500);
+        }
     }
 }

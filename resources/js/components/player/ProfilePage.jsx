@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
+import { HiUsers, HiChevronRight } from 'react-icons/hi';
 
 const ProfilePage = ({ user, userToken, onLogout, onUserUpdate, onNavigate, onStartPrivateChat }) => {
     const [isEditing, setIsEditing] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
-    const [activeTab, setActiveTab] = useState('profile'); // profile, stats, info
+    const [activeTab, setActiveTab] = useState('profile'); // profile, stats, info, communities
     const [searchQuery, setSearchQuery] = useState('');
     const [searchResults, setSearchResults] = useState([]);
     const [isSearching, setIsSearching] = useState(false);
@@ -23,6 +24,7 @@ const ProfilePage = ({ user, userToken, onLogout, onUserUpdate, onNavigate, onSt
     const [profilePicture, setProfilePicture] = useState(null);
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
+    const [communities, setCommunities] = useState([]);
 
     useEffect(() => {
         if (user) {
@@ -40,6 +42,10 @@ const ProfilePage = ({ user, userToken, onLogout, onUserUpdate, onNavigate, onSt
         
         if (activeTab === 'stats') {
             loadUserStats();
+        }
+
+        if (user && activeTab === 'communities') {
+            loadUserCommunities();
         }
     }, [user, activeTab]);
 
@@ -77,6 +83,26 @@ const ProfilePage = ({ user, userToken, onLogout, onUserUpdate, onNavigate, onSt
 
         } catch (error) {
             console.error('Error loading user stats:', error);
+        }
+    };
+
+    const loadUserCommunities = async () => {
+        try {
+            const response = await fetch('/api/communities/my-communities', {
+                headers: {
+                    'Authorization': `Bearer ${userToken}`,
+                    'Accept': 'application/json'
+                }
+            });
+            
+            if (response.ok) {
+                const data = await response.json();
+                if (data.status === 'success') {
+                    setCommunities(data.data.communities);
+                }
+            }
+        } catch (error) {
+            console.error('Error loading communities:', error);
         }
     };
 
@@ -752,6 +778,75 @@ const ProfilePage = ({ user, userToken, onLogout, onUserUpdate, onNavigate, onSt
         </div>
     );
 
+    const CommunitiesTab = () => (
+        <div className="space-y-4">
+            <div className="flex justify-between items-center">
+                <h2 className="text-lg font-semibold text-gray-900">My Communities</h2>
+                <button
+                    onClick={() => onNavigate('discover')}
+                    className="text-sm text-blue-600 hover:text-blue-800"
+                >
+                    Find Communities
+                </button>
+            </div>
+            
+            {communities.length === 0 ? (
+                <div className="text-center py-8">
+                    <div className="text-gray-400 mb-2">
+                        <HiUsers className="w-12 h-12 mx-auto" />
+                    </div>
+                    <p className="text-gray-600 mb-4">You haven't joined any communities yet</p>
+                    <button
+                        onClick={() => onNavigate('discover')}
+                        className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+                    >
+                        Explore Communities
+                    </button>
+                </div>
+            ) : (
+                <div className="space-y-3">
+                    {communities.map(community => (
+                        <div 
+                            key={community.id}
+                            className="bg-white rounded-lg shadow-sm p-4 flex items-center space-x-4"
+                            onClick={() => onNavigate('communityDetail', { communityId: community.id })}
+                        >
+                            <div className="w-12 h-12 rounded-lg bg-gray-200 overflow-hidden flex-shrink-0">
+                                {community.icon_url ? (
+                                    <img 
+                                        src={community.icon_url} 
+                                        alt={community.name}
+                                        className="w-full h-full object-cover"
+                                    />
+                                ) : (
+                                    <div className="w-full h-full flex items-center justify-center bg-blue-100 text-blue-600">
+                                        <HiUsers className="w-6 h-6" />
+                                    </div>
+                                )}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                                <h3 className="font-semibold text-gray-900 truncate">{community.name}</h3>
+                                <div className="flex items-center text-sm text-gray-500 space-x-2">
+                                    <span>{community.sport.name}</span>
+                                    <span>•</span>
+                                    <span>{community.members_count} members</span>
+                                </div>
+                                {community.user_level && (
+                                    <div className="mt-1">
+                                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                            Level: {community.user_level}
+                                        </span>
+                                    </div>
+                                )}
+                            </div>
+                            <HiChevronRight className="w-5 h-5 text-gray-400" />
+                        </div>
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+
     const InfoTab = () => (
         <div className="space-y-6">
             {/* App Information */}
@@ -858,6 +953,21 @@ const ProfilePage = ({ user, userToken, onLogout, onUserUpdate, onNavigate, onSt
         </div>
     );
 
+    const renderContent = () => {
+        switch (activeTab) {
+            case 'profile':
+                return <ProfileTab />;
+            case 'stats':
+                return <StatsTab />;
+            case 'communities':
+                return <CommunitiesTab />;
+            case 'info':
+                return <InfoTab />;
+            default:
+                return <ProfileTab />;
+        }
+    };
+
     return (
         <div className="bg-secondary min-h-screen">
             {/* Header */}
@@ -902,6 +1012,16 @@ const ProfilePage = ({ user, userToken, onLogout, onUserUpdate, onNavigate, onSt
                         Statistik
                     </button>
                     <button
+                        onClick={() => setActiveTab('communities')}
+                        className={`flex-1 py-2 px-4 rounded-lg font-medium transition-colors ${
+                            activeTab === 'communities'
+                                ? 'bg-white text-primary shadow-sm'
+                                : 'text-gray-600 hover:text-gray-800'
+                        }`}
+                    >
+                        Communities
+                    </button>
+                    <button
                         onClick={() => setActiveTab('info')}
                         className={`flex-1 py-2 px-4 rounded-lg font-medium transition-colors ${
                             activeTab === 'info'
@@ -916,9 +1036,7 @@ const ProfilePage = ({ user, userToken, onLogout, onUserUpdate, onNavigate, onSt
 
             {/* Content */}
             <div className="px-4 pb-20">
-                {activeTab === 'profile' && <ProfileTab />}
-                {activeTab === 'stats' && <StatsTab />}
-                {activeTab === 'info' && <InfoTab />}
+                {renderContent()}
             </div>
         </div>
     );

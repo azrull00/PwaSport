@@ -8,6 +8,7 @@ use App\Models\EventParticipant;
 use App\Models\User;
 use App\Models\UserSportRating;
 use App\Models\MatchHistory;
+use App\Models\GuestPlayer;
 use App\Services\MatchmakingService;
 use App\Services\CourtManagementService;
 use Illuminate\Http\Request;
@@ -427,70 +428,6 @@ class MatchmakingController extends Controller
     }
 
     /**
-     * Create fair matches using advanced algorithm
-     */
-    public function createFairMatches(Request $request, $eventId)
-    {
-        try {
-            $validator = Validator::make($request->all(), [
-                'auto_save' => 'nullable|boolean',
-            ]);
-
-            if ($validator->fails()) {
-                return response()->json([
-                    'status' => 'error',
-                    'message' => 'Validation failed',
-                    'errors' => $validator->errors()
-                ], 422);
-            }
-
-            $event = Event::findOrFail($eventId);
-            $user = Auth::user();
-
-            // Only host can create matchmaking
-            if ($event->host_id !== $user->id && !$user->hasRole('admin')) {
-                return response()->json([
-                    'status' => 'error',
-                    'message' => 'Hanya host yang dapat membuat matchmaking.'
-                ], 403);
-            }
-
-            // Use the new MatchmakingService with fair algorithm
-            $result = $this->matchmakingService->createFairMatches($event);
-
-            if (!$result['success']) {
-                return response()->json([
-                    'status' => 'error',
-                    'message' => $result['message'],
-                    'error' => $result['error'] ?? null
-                ], 422);
-            }
-
-            return response()->json([
-                'status' => 'success',
-                'message' => 'Fair matchmaking berhasil dibuat!',
-                'data' => [
-                    'event_id' => $event->id,
-                    'event_title' => $event->title,
-                    'algorithm_used' => 'Fair Matchmaking Algorithm v2.0',
-                    'total_matches' => $result['total_matches'],
-                    'matched_players' => $result['matched_players'],
-                    'waiting_players' => $result['waiting_players'],
-                    'matches' => $result['matches'],
-                    'queue_info' => $this->matchmakingService->getQueueInfo($event)
-                ]
-            ]);
-
-        } catch (\Exception $e) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Terjadi kesalahan saat membuat fair matchmaking.',
-                'error' => $e->getMessage()
-            ], 500);
-        }
-    }
-
-    /**
      * Get event-specific matchmaking status for participants
      */
     public function getEventMatchmakingStatus(Request $request, $eventId)
@@ -602,174 +539,37 @@ class MatchmakingController extends Controller
     /**
      * Get court status and queue information for an event
      */
-    public function getCourtStatus(Request $request, $eventId)
+    public function getCourtStatus(Event $event)
     {
-        try {
-            $event = Event::findOrFail($eventId);
-            $user = Auth::user();
+        $this->authorize('manage', $event);
 
-            // Host or admin can view court status
-            if ($event->host_id !== $user->id && !$user->hasRole('admin')) {
-                return response()->json([
-                    'status' => 'error',
-                    'message' => 'Hanya host yang dapat melihat status court.'
-                ], 403);
-            }
+        $courtStatus = $this->courtManagementService->getCourtStatus($event);
 
-            $courtStatus = $this->courtManagementService->getCourtStatus($event);
-
-            return response()->json([
-                'status' => 'success',
-                'data' => [
-                    'event_id' => $event->id,
-                    'event_title' => $event->title,
-                    'court_status' => $courtStatus
-                ]
-            ]);
-
-        } catch (\Exception $e) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Terjadi kesalahan saat mengambil status court.',
-                'error' => $e->getMessage()
-            ], 500);
-        }
-    }
-
-    /**
-     * Assign players to a specific court
-     */
-    public function assignCourt(Request $request, $eventId)
-    {
-        try {
-            $validator = Validator::make($request->all(), [
-                'court_number' => 'required|integer|min:1|max:20',
-                'player1_id' => 'required|exists:users,id',
-                'player2_id' => 'required|exists:users,id|different:player1_id',
-            ]);
-
-            if ($validator->fails()) {
-                return response()->json([
-                    'status' => 'error',
-                    'message' => 'Validation failed',
-                    'errors' => $validator->errors()
-                ], 422);
-            }
-
-            $event = Event::findOrFail($eventId);
-            $user = Auth::user();
-
-            // Only host can assign courts
-            if ($event->host_id !== $user->id && !$user->hasRole('admin')) {
-                return response()->json([
-                    'status' => 'error',
-                    'message' => 'Hanya host yang dapat mengatur court.'
-                ], 403);
-            }
-
-            $result = $this->courtManagementService->assignCourt(
-                $event,
-                $request->court_number,
-                $request->player1_id,
-                $request->player2_id,
-                $user->id
-            );
-
-            return response()->json([
-                'status' => $result['success'] ? 'success' : 'error',
-                'message' => $result['message'],
-                'data' => $result['success'] ? ['match' => $result['match']] : null
-            ], $result['success'] ? 200 : 422);
-
-        } catch (\Exception $e) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Terjadi kesalahan saat mengatur court.',
-                'error' => $e->getMessage()
-            ], 500);
-        }
-    }
-
-    /**
-     * Override/switch free players
-     */
-    public function overridePlayer(Request $request, $eventId)
-    {
-        try {
-            $validator = Validator::make($request->all(), [
-                'match_id' => 'required|exists:match_history,id',
-                'old_player_id' => 'required|exists:users,id',
-                'new_player_id' => 'required|exists:users,id|different:old_player_id',
-                'reason' => 'nullable|string|max:255',
-            ]);
-
-            if ($validator->fails()) {
-                return response()->json([
-                    'status' => 'error',
-                    'message' => 'Validation failed',
-                    'errors' => $validator->errors()
-                ], 422);
-            }
-
-            $event = Event::findOrFail($eventId);
-            $user = Auth::user();
-
-            $result = $this->courtManagementService->overridePlayer(
-                $event,
-                $request->match_id,
-                $request->old_player_id,
-                $request->new_player_id,
-                $user->id,
-                $request->reason
-            );
-
-            return response()->json([
-                'status' => $result['success'] ? 'success' : 'error',
-                'message' => $result['message'],
-                'data' => $result['success'] ? ['match' => $result['match']] : null
-            ], $result['success'] ? 200 : 422);
-
-        } catch (\Exception $e) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Terjadi kesalahan saat mengganti player.',
-                'error' => $e->getMessage()
-            ], 500);
-        }
+        return response()->json([
+            'status' => 'success',
+            'data' => [
+                'event_id' => $event->id,
+                'event_title' => $event->title,
+                'courts' => $courtStatus['courts'] ?? [],
+                'matches' => $courtStatus['matches'] ?? []
+            ]
+        ]);
     }
 
     /**
      * Start a match
      */
-    public function startMatch(Request $request, $eventId, $matchId)
+    public function startMatch(Request $request, Event $event, $matchId)
     {
-        try {
-            $event = Event::findOrFail($eventId);
-            $user = Auth::user();
+        $this->authorize('manage', $event);
 
-            // Only host can start matches
-            if ($event->host_id !== $user->id && !$user->hasRole('admin')) {
-                return response()->json([
-                    'status' => 'error',
-                    'message' => 'Hanya host yang dapat memulai match.'
-                ], 403);
-            }
+        $result = $this->courtManagementService->startMatch($matchId, Auth::id());
 
-            $result = $this->courtManagementService->startMatch($matchId, $user->id);
-
-            return response()->json([
-                'status' => $result['success'] ? 'success' : 'error',
-                'message' => $result['message'],
-                'data' => $result['success'] ? ['match' => $result['match']] : null
-            ], $result['success'] ? 200 : 422);
-
-        } catch (\Exception $e) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Terjadi kesalahan saat memulai match.',
-                'error' => $e->getMessage()
-            ], 500);
-        }
+        return response()->json([
+            'status' => $result['success'] ? 'success' : 'error',
+            'message' => $result['message'],
+            'data' => $result['success'] ? ['match' => $result['match']] : null
+        ], $result['success'] ? 200 : 422);
     }
 
     /**
@@ -805,6 +605,410 @@ class MatchmakingController extends Controller
                 'status' => 'error',
                 'message' => 'Terjadi kesalahan saat mengambil suggestions.',
                 'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    public function getEventParticipants($eventId)
+    {
+        $user = Auth::user();
+        $event = Event::findOrFail($eventId);
+
+        // Check if user is host
+        if ($event->host_id !== $user->id && !$user->hasRole('admin')) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Unauthorized'
+            ], 403);
+        }
+
+        $participants = EventParticipant::with('user')
+            ->where('event_id', $eventId)
+            ->where('status', 'checked_in')
+            ->whereDoesntHave('activeMatch')
+            ->get()
+            ->map(function ($participant) {
+                $user = $participant->user;
+                $sportRating = $user->sportRatings()
+                    ->where('sport_id', $participant->event->sport_id)
+                    ->first();
+
+                return [
+                    'id' => $user->id,
+                    'name' => $user->name,
+                    'profile_picture' => $user->profile_picture,
+                    'mmr' => $sportRating ? $sportRating->mmr : 1000,
+                    'level' => $sportRating ? $sportRating->level : 'beginner',
+                    'win_rate' => $sportRating ? $sportRating->win_rate : 0,
+                    'is_premium' => $user->is_premium
+                ];
+            });
+
+        return response()->json([
+            'status' => 'success',
+            'data' => [
+                'participants' => $participants
+            ]
+        ]);
+    }
+
+    public function getEventMatches($eventId)
+    {
+        $user = Auth::user();
+        $event = Event::findOrFail($eventId);
+
+        // Check if user is host
+        if ($event->host_id !== $user->id && !$user->hasRole('admin')) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Unauthorized'
+            ], 403);
+        }
+
+        $matches = MatchHistory::with(['player1', 'player2'])
+            ->where('event_id', $eventId)
+            ->whereIn('match_status', ['scheduled', 'ongoing'])
+            ->get()
+            ->map(function ($match) {
+                return [
+                    'id' => $match->id,
+                    'player1' => [
+                        'id' => $match->player1->id,
+                        'name' => $match->player1->name,
+                        'profile_picture' => $match->player1->profile_picture
+                    ],
+                    'player2' => [
+                        'id' => $match->player2->id,
+                        'name' => $match->player2->name,
+                        'profile_picture' => $match->player2->profile_picture
+                    ],
+                    'court_number' => $match->court_number,
+                    'status' => $match->match_status,
+                    'locked' => $match->is_locked,
+                    'created_at' => $match->created_at
+                ];
+            });
+
+        return response()->json([
+            'status' => 'success',
+            'data' => [
+                'matches' => $matches
+            ]
+        ]);
+    }
+
+    public function overrideMatch(Request $request, $eventId)
+    {
+        $user = Auth::user();
+        $event = Event::findOrFail($eventId);
+
+        // Check if user is host
+        if ($event->host_id !== $user->id && !$user->hasRole('admin')) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Unauthorized'
+            ], 403);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'player1_id' => 'required|exists:users,id',
+            'player2_id' => 'required|exists:users,id|different:player1_id'
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Invalid player selection',
+                'errors' => $validator->errors()
+            ], 422);
+        }
+
+        try {
+            DB::beginTransaction();
+
+            // Check if players are available
+            $player1 = EventParticipant::where('event_id', $eventId)
+                ->where('user_id', $request->player1_id)
+                ->where('status', 'checked_in')
+                ->firstOrFail();
+
+            $player2 = EventParticipant::where('event_id', $eventId)
+                ->where('user_id', $request->player2_id)
+                ->where('status', 'checked_in')
+                ->firstOrFail();
+
+            // Create match
+            $match = new MatchHistory([
+                'event_id' => $eventId,
+                'player1_id' => $request->player1_id,
+                'player2_id' => $request->player2_id,
+                'match_status' => 'scheduled',
+                'is_override' => true,
+                'override_by' => $user->id
+            ]);
+
+            $match->save();
+
+            DB::commit();
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Match created successfully',
+                'data' => [
+                    'match' => $match
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Failed to create match'
+            ], 500);
+        }
+    }
+
+    public function toggleMatchLock(Request $request, $eventId, $matchId)
+    {
+        $user = Auth::user();
+        $event = Event::findOrFail($eventId);
+
+        // Check if user is host
+        if ($event->host_id !== $user->id && !$user->hasRole('admin')) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Unauthorized'
+            ], 403);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'locked' => 'required|boolean'
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Invalid request',
+                'errors' => $validator->errors()
+            ], 422);
+        }
+
+        try {
+            $match = MatchHistory::where('event_id', $eventId)
+                ->findOrFail($matchId);
+
+            $match->is_locked = $request->locked;
+            $match->save();
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Match lock status updated',
+                'data' => [
+                    'match' => $match
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Failed to update match lock status'
+            ], 500);
+        }
+    }
+
+    public function getStatus(Event $event)
+    {
+        $this->authorize('manage', $event);
+
+        $matches = MatchHistory::with(['player1', 'player2', 'player1Guest', 'player2Guest'])
+            ->where('event_id', $event->id)
+            ->whereIn('match_status', ['pending', 'scheduled', 'ongoing'])
+            ->get()
+            ->map(function ($match) {
+                return [
+                    'id' => $match->id,
+                    'player1' => $match->player1 ? [
+                        'id' => $match->player1->id,
+                        'name' => $match->player1->name,
+                        'mmr' => $match->player1->userSportRatings()
+                            ->where('sport_id', $match->event->sport_id)
+                            ->first()?->mmr ?? 1000,
+                        'win_rate' => $this->matchmakingService->calculateWinRate($match->player1, $match->event->sport_id),
+                        'is_guest' => false
+                    ] : [
+                        'id' => 'guest_' . $match->player1Guest->id,
+                        'name' => $match->player1Guest->name . ' (Guest)',
+                        'mmr' => $match->player1Guest->estimated_mmr,
+                        'win_rate' => null,
+                        'is_guest' => true
+                    ],
+                    'player2' => $match->player2 ? [
+                        'id' => $match->player2->id,
+                        'name' => $match->player2->name,
+                        'mmr' => $match->player2->userSportRatings()
+                            ->where('sport_id', $match->event->sport_id)
+                            ->first()?->mmr ?? 1000,
+                        'win_rate' => $this->matchmakingService->calculateWinRate($match->player2, $match->event->sport_id),
+                        'is_guest' => false
+                    ] : [
+                        'id' => 'guest_' . $match->player2Guest->id,
+                        'name' => $match->player2Guest->name . ' (Guest)',
+                        'mmr' => $match->player2Guest->estimated_mmr,
+                        'win_rate' => null,
+                        'is_guest' => true
+                    ],
+                    'court_number' => $match->court_number,
+                    'status' => $match->match_status,
+                    'scheduled_time' => $match->scheduled_time,
+                ];
+            });
+
+        $waitingPlayers = $this->matchmakingService->getEligibleParticipants($event);
+
+        return response()->json([
+            'matches' => $matches,
+            'waiting_players' => $waitingPlayers
+        ]);
+    }
+
+    public function createFairMatches(Event $event)
+    {
+        $this->authorize('manage', $event);
+
+        $result = $this->matchmakingService->createFairMatches($event);
+
+        return response()->json($result);
+    }
+
+    public function overridePlayer(Request $request, Event $event)
+    {
+        $this->authorize('manage', $event);
+
+        $validated = $request->validate([
+            'match_id' => 'required|exists:match_history,id',
+            'player_to_replace' => 'required|string', // Can be user ID or guest_ID
+            'replacement_player' => 'required|string', // Can be user ID or guest_ID
+        ]);
+
+        try {
+            DB::beginTransaction();
+
+            $match = MatchHistory::findOrFail($validated['match_id']);
+
+            // Determine if we're replacing player1 or player2
+            $isPlayer1 = false;
+            if ($match->player1_id && $match->player1_id == $validated['player_to_replace']) {
+                $isPlayer1 = true;
+            } elseif ($match->player1_guest_id && 'guest_' . $match->player1_guest_id == $validated['player_to_replace']) {
+                $isPlayer1 = true;
+            } elseif ($match->player2_id && $match->player2_id == $validated['player_to_replace']) {
+                $isPlayer1 = false;
+            } elseif ($match->player2_guest_id && 'guest_' . $match->player2_guest_id == $validated['player_to_replace']) {
+                $isPlayer1 = false;
+            } else {
+                throw new \Exception('Player to replace not found in match');
+            }
+
+            // Handle replacement player (can be regular user or guest)
+            if (str_starts_with($validated['replacement_player'], 'guest_')) {
+                $guestId = substr($validated['replacement_player'], 6);
+                $guest = GuestPlayer::findOrFail($guestId);
+                
+                if ($isPlayer1) {
+                    $match->player1_id = null;
+                    $match->player1_guest_id = $guest->id;
+                } else {
+                    $match->player2_id = null;
+                    $match->player2_guest_id = $guest->id;
+                }
+            } else {
+                $user = User::findOrFail($validated['replacement_player']);
+                
+                if ($isPlayer1) {
+                    $match->player1_id = $user->id;
+                    $match->player1_guest_id = null;
+                } else {
+                    $match->player2_id = $user->id;
+                    $match->player2_guest_id = null;
+                }
+            }
+
+            $match->save();
+
+            DB::commit();
+
+            return response()->json([
+                'message' => 'Player override successful',
+                'match' => $match
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'message' => 'Failed to override player: ' . $e->getMessage()
+            ], 400);
+        }
+    }
+
+    public function assignCourt(Request $request, Event $event)
+    {
+        $this->authorize('manage', $event);
+
+        $validated = $request->validate([
+            'match_id' => 'required|exists:match_history,id',
+            'court_number' => 'required|integer|min:1|max:20',
+        ]);
+
+        $match = MatchHistory::findOrFail($validated['match_id']);
+        
+        // Check if court is available
+        $courtInUse = MatchHistory::where('event_id', $event->id)
+            ->where('id', '!=', $match->id)
+            ->where('court_number', $validated['court_number'])
+            ->whereIn('match_status', ['scheduled', 'ongoing'])
+            ->exists();
+
+        if ($courtInUse) {
+            return response()->json([
+                'message' => 'Court is currently in use'
+            ], 400);
+        }
+
+        $match->update([
+            'court_number' => $validated['court_number'],
+            'match_status' => 'scheduled',
+            'scheduled_time' => now()
+        ]);
+
+        return response()->json([
+            'message' => 'Court assigned successfully',
+            'match' => $match
+        ]);
+    }
+
+    public function endMatch(Request $request, Event $event, $matchId)
+    {
+        $this->authorize('manage', $event);
+
+        try {
+            $match = MatchHistory::where('event_id', $event->id)->findOrFail($matchId);
+            
+            $match->update([
+                'match_status' => 'completed',
+                'end_time' => now(),
+                'updated_by' => Auth::id()
+            ]);
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Match ended successfully',
+                'data' => ['match' => $match]
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Failed to end match'
             ], 500);
         }
     }

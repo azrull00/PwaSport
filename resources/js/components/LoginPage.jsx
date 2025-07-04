@@ -66,6 +66,11 @@ const LoginPage = ({ onNavigate, userType, onLoginSuccess }) => {
 
             if (data.status === 'success') {
                 // Call the success callback to handle authentication
+                if (data.data.user.is_host) {
+                    onNavigate('hostDashboard');
+                } else {
+                    onNavigate('playerDashboard');
+                }
                 onLoginSuccess(data.data.token, data.data.user, userType);
             } else {
                 // Handle validation errors

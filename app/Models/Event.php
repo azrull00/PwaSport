@@ -77,6 +77,11 @@ class Event extends Model
         return $this->hasMany(EventParticipant::class);
     }
 
+    public function guestPlayers()
+    {
+        return $this->hasMany(GuestPlayer::class);
+    }
+
     public function confirmedParticipants()
     {
         return $this->hasMany(EventParticipant::class)->where('status', 'confirmed');

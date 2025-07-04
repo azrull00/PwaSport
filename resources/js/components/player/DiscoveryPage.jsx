@@ -1,4 +1,8 @@
 import React, { useState, useEffect } from 'react';
+import axios from 'axios';
+import { getCurrentPosition } from '../../utils/locationUtils';
+import DistanceDisplay from '../common/DistanceDisplay';
+import LocationPicker from '../common/LocationPicker';
 
 const DiscoveryPage = ({ userToken, onNavigate }) => {
     const [activeTab, setActiveTab] = useState('events'); // 'events' atau 'communities'
@@ -10,10 +14,15 @@ const DiscoveryPage = ({ userToken, onNavigate }) => {
         sport_id: '',
         skill_level: '',
         city: '',
-        date_range: 'all' // today, this_week, this_month, all
+        date_range: 'all', // today, this_week, this_month, all
+        event_type: '',
+        date_from: '',
+        date_to: ''
     });
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState('');
+    const [currentLocation, setCurrentLocation] = useState(null);
+    const [searchRadius, setSearchRadius] = useState(10); // Default 10km
 
     // Load initial data
     useEffect(() => {
@@ -24,6 +33,23 @@ const DiscoveryPage = ({ userToken, onNavigate }) => {
             loadCommunities();
         }
     }, [activeTab, filters]);
+
+    // Get current location and load data
+    useEffect(() => {
+        const initializeLocation = async () => {
+            try {
+                const position = await getCurrentPosition();
+                setCurrentLocation(position);
+                await fetchData(position);
+            } catch (error) {
+                console.error('Error getting location:', error);
+                setError('Please enable location services to see nearby events and communities');
+                setIsLoading(false);
+            }
+        };
+
+        initializeLocation();
+    }, []);
 
     const loadSports = async () => {
         try {
@@ -139,6 +165,42 @@ const DiscoveryPage = ({ userToken, onNavigate }) => {
         }
     };
 
+    // Fetch data based on location
+    const fetchData = async (location) => {
+        if (!location) return;
+
+        setIsLoading(true);
+        try {
+            const [eventsResponse, communitiesResponse] = await Promise.all([
+                axios.get('/api/events/nearby', {
+                    params: {
+                        latitude: location.latitude,
+                        longitude: location.longitude,
+                        radius_km: searchRadius,
+                        ...filters
+                    }
+                }),
+                axios.get('/api/communities/nearby', {
+                    params: {
+                        latitude: location.latitude,
+                        longitude: location.longitude,
+                        radius_km: searchRadius,
+                        sport_id: filters.sport_id
+                    }
+                })
+            ]);
+
+            setEvents(eventsResponse.data.data.events);
+            setCommunities(communitiesResponse.data.data.communities);
+            setError(null);
+        } catch (error) {
+            console.error('Error fetching data:', error);
+            setError('Failed to load nearby events and communities');
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
     const handleSearch = () => {
         if (activeTab === 'events') {
             loadEvents();
@@ -148,10 +210,11 @@ const DiscoveryPage = ({ userToken, onNavigate }) => {
     };
 
     const handleFilterChange = (key, value) => {
-        setFilters(prev => ({
-            ...prev,
-            [key]: value
-        }));
+        const newFilters = { ...filters, [key]: value };
+        setFilters(newFilters);
+        if (currentLocation) {
+            fetchData(currentLocation);
+        }
     };
 
     const clearFilters = () => {
@@ -159,7 +222,10 @@ const DiscoveryPage = ({ userToken, onNavigate }) => {
             sport_id: '',
             skill_level: '',
             city: '',
-            date_range: 'all'
+            date_range: 'all',
+            event_type: '',
+            date_from: '',
+            date_to: ''
         });
         setSearchQuery('');
     };

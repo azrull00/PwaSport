@@ -7,12 +7,18 @@ use App\Models\EventParticipant;
 use App\Models\User;
 use App\Models\UserSportRating;
 use App\Models\MatchHistory;
+use App\Models\GuestPlayer;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
 
 class MatchmakingService
 {
+    private $levelWeight = 0.40;
+    private $mmrWeight = 0.35;
+    private $winRateWeight = 0.15;
+    private $waitingTimeWeight = 0.10;
+
     /**
      * Fair Matchmaking Algorithm
      * Factors: MMR, Win Rate, Waiting Time, Premium Protection
@@ -22,144 +28,266 @@ class MatchmakingService
         try {
             DB::beginTransaction();
 
-            // Get all confirmed participants with ratings
             $participants = $this->getEligibleParticipants($event);
             
             if ($participants->count() < 2) {
                 return [
                     'success' => false,
-                    'message' => 'Tidak cukup peserta untuk matchmaking (minimum 2)'
+                    'message' => 'Not enough players for matchmaking'
                 ];
             }
 
-            // Calculate compatibility scores for all possible pairs
-            $possibleMatches = $this->calculateCompatibilityScores($participants, $event);
+            $possibleMatches = $this->calculateCompatibilityScores($participants);
+            $matches = $this->optimizeMatches($possibleMatches);
             
-            // Create optimal matches using fair algorithm
-            $matches = $this->optimizeMatches($possibleMatches, $event);
-            
-            // Save matches to database
-            $savedMatches = $this->saveMatches($matches, $event);
-            
+            // Create match records
+            $createdMatches = collect();
+            foreach ($matches as $match) {
+                $matchRecord = new MatchHistory([
+                    'event_id' => $event->id,
+                    'court_number' => null, // Will be assigned by host
+                    'match_status' => 'pending',
+                    'scheduled_time' => now(),
+                ]);
+
+                if ($match['player1']['player_type'] === 'registered') {
+                    $matchRecord->player1_id = $match['player1']['user_id'];
+                } else {
+                    $matchRecord->player1_guest_id = $match['player1']['guest_id'];
+                }
+
+                if ($match['player2']['player_type'] === 'registered') {
+                    $matchRecord->player2_id = $match['player2']['user_id'];
+                } else {
+                    $matchRecord->player2_guest_id = $match['player2']['guest_id'];
+                }
+
+                $matchRecord->save();
+                $createdMatches->push($matchRecord);
+            }
+
             DB::commit();
             
             return [
                 'success' => true,
-                'matches' => $savedMatches,
-                'total_matches' => count($savedMatches),
-                'matched_players' => count($savedMatches) * 2,
-                'waiting_players' => $participants->count() - (count($savedMatches) * 2)
+                'matches' => $createdMatches,
+                'total_matches' => $createdMatches->count()
             ];
 
         } catch (\Exception $e) {
             DB::rollBack();
-            Log::error('Matchmaking Error: ' . $e->getMessage(), [
-                'event_id' => $event->id,
-                'trace' => $e->getTraceAsString()
-            ]);
-            
-            return [
-                'success' => false,
-                'message' => 'Terjadi kesalahan saat melakukan matchmaking',
-                'error' => $e->getMessage()
-            ];
+            \Log::error('Error in createFairMatches: ' . $e->getMessage());
+            return ['success' => false, 'message' => 'Error creating matches'];
         }
     }
 
     /**
      * Get eligible participants for matchmaking
      */
-    private function getEligibleParticipants(Event $event)
+    public function getEligibleParticipants(Event $event)
     {
-        return EventParticipant::with(['user.sportRatings', 'user.profile'])
+        // Get registered players
+        $registeredParticipants = EventParticipant::with(['user', 'user.userSportRatings'])
             ->where('event_id', $event->id)
-            ->where('status', 'confirmed')
-            ->whereDoesntHave('currentMatches', function($query) {
-                $query->whereIn('match_status', ['scheduled', 'ongoing']);
-            })
+            ->where('status', 'checked_in')
+            ->whereNull('guest_player_id')
             ->get();
+
+        // Get guest players
+        $guestParticipants = EventParticipant::with(['guestPlayer'])
+            ->where('event_id', $event->id)
+            ->where('status', 'checked_in')
+            ->whereNotNull('guest_player_id')
+            ->get();
+
+        // Combine and format all participants
+        $allParticipants = collect();
+
+        foreach ($registeredParticipants as $participant) {
+            $allParticipants->push([
+                'participant_id' => $participant->id,
+                'player_type' => 'registered',
+                'user_id' => $participant->user_id,
+                'guest_id' => null,
+                'name' => $participant->user->name,
+                'mmr' => $participant->user->userSportRatings
+                    ->where('sport_id', $event->sport_id)
+                    ->first()?->mmr ?? 1000,
+                'win_rate' => $this->calculateWinRate($participant->user, $event->sport_id),
+                'waiting_since' => $participant->checked_in_at,
+                'is_premium' => $participant->user->is_premium
+            ]);
+        }
+
+        foreach ($guestParticipants as $participant) {
+            $guest = $participant->guestPlayer;
+            $allParticipants->push([
+                'participant_id' => $participant->id,
+                'player_type' => 'guest',
+                'user_id' => null,
+                'guest_id' => $guest->id,
+                'name' => $guest->name . ' (Guest)',
+                'mmr' => $guest->estimated_mmr,
+                'win_rate' => null,
+                'waiting_since' => $participant->checked_in_at,
+                'is_premium' => false
+            ]);
+        }
+
+        return $allParticipants;
     }
 
     /**
      * Calculate compatibility scores for all possible player pairs
      */
-    private function calculateCompatibilityScores($participants, Event $event)
+    protected function calculateCompatibilityScores($participants)
     {
-        $possibleMatches = [];
-        $participantArray = $participants->toArray();
+        $possibleMatches = collect();
 
-        for ($i = 0; $i < count($participantArray) - 1; $i++) {
-            for ($j = $i + 1; $j < count($participantArray); $j++) {
-                $player1 = $participants[$i];
-                $player2 = $participants[$j];
+        foreach ($participants as $i => $player1) {
+            foreach ($participants->slice($i + 1) as $player2) {
+                $mmrDiff = abs($player1['mmr'] - $player2['mmr']);
+                $waitingTime = max(
+                    now()->diffInMinutes($player1['waiting_since']),
+                    now()->diffInMinutes($player2['waiting_since'])
+                );
 
-                $compatibilityScore = $this->calculateCompatibility($player1, $player2, $event);
-                
-                $possibleMatches[] = [
+                // Calculate win rate compatibility only if both are registered players
+                $winRateScore = 100;
+                if ($player1['player_type'] === 'registered' && $player2['player_type'] === 'registered') {
+                    $winRateDiff = abs(($player1['win_rate'] ?? 0) - ($player2['win_rate'] ?? 0));
+                    $winRateScore = max(0, 100 - ($winRateDiff * 2));
+                }
+
+                // Calculate final compatibility score
+                $score = $this->calculateFinalScore($mmrDiff, $winRateScore, $waitingTime);
+
+                $possibleMatches->push([
                     'player1' => $player1,
                     'player2' => $player2,
-                    'compatibility_score' => $compatibilityScore,
-                    'details' => $compatibilityScore['details']
-                ];
+                    'compatibility_score' => $score,
+                    'details' => [
+                        'mmr_difference' => $mmrDiff,
+                        'win_rate_score' => $winRateScore,
+                        'waiting_time' => $waitingTime
+                    ]
+                ]);
             }
         }
 
-        // Sort by compatibility score (highest first)
-        usort($possibleMatches, function($a, $b) {
-            return $b['compatibility_score']['total'] <=> $a['compatibility_score']['total'];
-        });
+        return $possibleMatches->sortByDesc('compatibility_score');
+    }
 
-        return $possibleMatches;
+    /**
+     * Optimize matches to avoid conflicts and maximize fairness
+     */
+    private function optimizeMatches($possibleMatches)
+    {
+        $matches = [];
+        $usedPlayers = [];
+        
+        foreach ($possibleMatches as $match) {
+            $player1Id = $match['player1']['participant_id'];
+            $player2Id = $match['player2']['participant_id'];
+            
+            if (!isset($usedPlayers[$player1Id]) && !isset($usedPlayers[$player2Id])) {
+                $matches[] = $match;
+                $usedPlayers[$player1Id] = true;
+                $usedPlayers[$player2Id] = true;
+            }
+        }
+        
+        return $matches;
     }
 
     /**
      * Calculate compatibility between two players
      */
-    private function calculateCompatibility($participant1, $participant2, Event $event)
+    private function calculateCompatibilityScore($participant1, $participant2)
     {
-        $player1 = $participant1->user;
-        $player2 = $participant2->user;
-        
-        // Get sport ratings
-        $rating1 = $this->getUserSportRating($player1, $event->sport_id);
-        $rating2 = $this->getUserSportRating($player2, $event->sport_id);
+        $player1 = $participant1['user'];
+        $player2 = $participant2['user'];
 
-        // Calculate individual factors
-        $mmrScore = $this->calculateMMRCompatibility($rating1['mmr'], $rating2['mmr']);
-        $winRateScore = $this->calculateWinRateCompatibility($rating1['win_rate'], $rating2['win_rate']);
-        $waitingTimeScore = $this->calculateWaitingTimeBonus($participant1, $participant2);
+        // Check premium player protection
+        if (!$this->canMatchPremiumPlayers($player1, $player2)) {
+            return [
+                'total' => 0,
+                'details' => [
+                    'level_score' => 0,
+                    'mmr_score' => 0,
+                    'win_rate_score' => 0,
+                    'waiting_score' => 0,
+                    'reason' => 'Premium player protection active'
+                ]
+            ];
+        }
+
+        // Get sport ratings
+        $rating1 = $this->getUserSportRating($player1, $participant1['event']->sport_id);
+        $rating2 = $this->getUserSportRating($player2, $participant2['event']->sport_id);
+
+        // Calculate level compatibility (40%)
         $levelScore = $this->calculateLevelCompatibility($rating1['level'], $rating2['level']);
 
-        // Factor weights
-        $weights = [
-            'mmr' => 0.4,      // 40% - Most important for fair matches
-            'level' => 0.25,   // 25% - Skill level compatibility  
-            'win_rate' => 0.2, // 20% - Performance consistency
-            'waiting_time' => 0.15 // 15% - Fairness for waiting players
-        ];
+        // Calculate MMR compatibility (35%)
+        $mmrScore = $this->calculateMMRCompatibility($rating1['mmr'], $rating2['mmr']);
 
-        $totalScore = (
-            $mmrScore * $weights['mmr'] +
-            $levelScore * $weights['level'] +
-            $winRateScore * $weights['win_rate'] +
-            $waitingTimeScore * $weights['waiting_time']
-        );
+        // Calculate win rate compatibility (15%)
+        $winRateScore = $this->calculateWinRateCompatibility($rating1['win_rate'], $rating2['win_rate']);
+
+        // Calculate waiting time bonus (10%)
+        $waitingScore = $this->calculateWaitingTimeBonus($participant1, $participant2);
+
+        // Apply new weights
+        $totalScore = ($levelScore * 0.4) +
+                     ($mmrScore * 0.35) +
+                     ($winRateScore * 0.15) +
+                     ($waitingScore * 0.1);
 
         return [
             'total' => round($totalScore, 2),
             'details' => [
-                'mmr_score' => $mmrScore,
-                'level_score' => $levelScore,
-                'win_rate_score' => $winRateScore,
-                'waiting_time_score' => $waitingTimeScore,
-                'player1_mmr' => $rating1['mmr'],
-                'player2_mmr' => $rating2['mmr'],
-                'player1_level' => $rating1['level'],
-                'player2_level' => $rating2['level'],
-                'player1_win_rate' => $rating1['win_rate'],
-                'player2_win_rate' => $rating2['win_rate']
+                'level_score' => round($levelScore, 2),
+                'mmr_score' => round($mmrScore, 2),
+                'win_rate_score' => round($winRateScore, 2),
+                'waiting_score' => round($waitingScore, 2)
             ]
         ];
+    }
+
+    /**
+     * Level Compatibility (same or adjacent levels preferred)
+     */
+    private function calculateLevelCompatibility($level1, $level2)
+    {
+        $levelValues = [
+            'beginner' => 1,
+            'intermediate' => 2,
+            'advanced' => 3,
+            'expert' => 4,
+            'professional' => 5
+        ];
+
+        $value1 = $levelValues[$level1] ?? 1;
+        $value2 = $levelValues[$level2] ?? 1;
+        $difference = abs($value1 - $value2);
+
+        // Perfect match for same level
+        if ($difference === 0) {
+            return 100;
+        }
+        // One level difference
+        elseif ($difference === 1) {
+            return 75;
+        }
+        // Two levels difference
+        elseif ($difference === 2) {
+            return 50;
+        }
+        // More than two levels difference
+        else {
+            return max(0, 100 - ($difference * 30));
+        }
     }
 
     /**
@@ -168,16 +296,22 @@ class MatchmakingService
     private function calculateMMRCompatibility($mmr1, $mmr2)
     {
         $difference = abs($mmr1 - $mmr2);
-        
-        // Optimal MMR difference: 0-100 points
+
+        // Perfect match (0-50 MMR difference)
         if ($difference <= 50) {
-            return 100; // Perfect match
-        } elseif ($difference <= 100) {
-            return 90 - ($difference - 50); // 90-40 range
-        } elseif ($difference <= 200) {
-            return 40 - (($difference - 100) * 0.3); // 40-10 range
-        } else {
-            return max(0, 10 - (($difference - 200) * 0.05)); // 10-0 range
+            return 100;
+        }
+        // Good match (51-100 MMR difference)
+        elseif ($difference <= 100) {
+            return 90 - (($difference - 50) * 0.8);
+        }
+        // Acceptable match (101-200 MMR difference)
+        elseif ($difference <= 200) {
+            return 50 - (($difference - 100) * 0.4);
+        }
+        // Poor match (>200 MMR difference)
+        else {
+            return max(0, 10 - (($difference - 200) * 0.05));
         }
     }
 
@@ -187,16 +321,22 @@ class MatchmakingService
     private function calculateWinRateCompatibility($winRate1, $winRate2)
     {
         $difference = abs($winRate1 - $winRate2);
-        
-        // Win rate difference scoring
-        if ($difference <= 10) {
-            return 100; // Very similar performance
-        } elseif ($difference <= 20) {
-            return 80 - ($difference - 10); // 80-70 range
-        } elseif ($difference <= 40) {
-            return 70 - (($difference - 20) * 1.5); // 70-40 range
-        } else {
-            return max(0, 40 - (($difference - 40) * 0.8)); // 40-0 range
+
+        // Perfect match (0-5% difference)
+        if ($difference <= 5) {
+            return 100;
+        }
+        // Good match (6-15% difference)
+        elseif ($difference <= 15) {
+            return 90 - (($difference - 5) * 2);
+        }
+        // Acceptable match (16-30% difference)
+        elseif ($difference <= 30) {
+            return 70 - (($difference - 15) * 2);
+        }
+        // Poor match (>30% difference)
+        else {
+            return max(0, 40 - (($difference - 30) * 1));
         }
     }
 
@@ -205,45 +345,17 @@ class MatchmakingService
      */
     private function calculateWaitingTimeBonus($participant1, $participant2)
     {
-        $now = Carbon::now();
-        $waitTime1 = $now->diffInMinutes($participant1->confirmed_at ?? $participant1->created_at);
-        $waitTime2 = $now->diffInMinutes($participant2->confirmed_at ?? $participant2->created_at);
-        
+        $waitTime1 = now()->diffInMinutes($participant1['waiting_since']);
+        $waitTime2 = now()->diffInMinutes($participant2['waiting_since']);
         $avgWaitTime = ($waitTime1 + $waitTime2) / 2;
-        
-        // Waiting time bonus scoring
-        if ($avgWaitTime >= 60) { // 1+ hours
-            return 100;
-        } elseif ($avgWaitTime >= 30) { // 30+ minutes
-            return 80 + (($avgWaitTime - 30) / 30) * 20;
-        } elseif ($avgWaitTime >= 15) { // 15+ minutes
-            return 60 + (($avgWaitTime - 15) / 15) * 20;
-        } else {
-            return 40 + ($avgWaitTime / 15) * 20; // 0-15 minutes
-        }
-    }
 
-    /**
-     * Level Compatibility (same or adjacent levels preferred)
-     */
-    private function calculateLevelCompatibility($level1, $level2)
-    {
-        $levelOrder = ['beginner', 'intermediate', 'advanced', 'expert'];
-        $index1 = array_search($level1, $levelOrder);
-        $index2 = array_search($level2, $levelOrder);
-        
-        if ($index1 === false || $index2 === false) {
-            return 50; // Unknown levels
+        // Max score for waiting 60+ minutes
+        if ($avgWaitTime >= 60) {
+            return 100;
         }
-        
-        $difference = abs($index1 - $index2);
-        
-        switch ($difference) {
-            case 0: return 100; // Same level
-            case 1: return 75;  // Adjacent level
-            case 2: return 40;  // Two levels apart
-            case 3: return 10;  // Maximum difference
-            default: return 0;
+        // Linear increase from 0 to 100 over 60 minutes
+        else {
+            return min(100, ($avgWaitTime / 60) * 100);
         }
     }
 
@@ -252,58 +364,13 @@ class MatchmakingService
      */
     private function getUserSportRating($user, $sportId)
     {
-        $rating = UserSportRating::where('user_id', $user->id)
-            ->where('sport_id', $sportId)
-            ->first();
-
-        if (!$rating) {
-            return [
-                'mmr' => 1000, // Default MMR for new players
-                'level' => 'beginner',
-                'win_rate' => 0,
-                'matches_played' => 0
-            ];
-        }
-
-        $winRate = $rating->matches_played > 0 ? 
-            round(($rating->matches_won / $rating->matches_played) * 100, 1) : 0;
-
+        $rating = $user->sportRatings()->where('sport_id', $sportId)->first();
+        
         return [
-            'mmr' => $rating->mmr,
-            'level' => $this->getSkillLevelFromMMR($rating->mmr),
-            'win_rate' => $winRate,
-            'matches_played' => $rating->matches_played
+            'mmr' => $rating ? $rating->mmr : 1000,
+            'level' => $rating ? $rating->level : 'beginner',
+            'win_rate' => $rating ? $rating->win_rate : 50
         ];
-    }
-
-    /**
-     * Optimize matches to avoid conflicts and maximize fairness
-     */
-    private function optimizeMatches($possibleMatches, Event $event)
-    {
-        $finalMatches = [];
-        $usedPlayers = [];
-
-        foreach ($possibleMatches as $match) {
-            $player1Id = $match['player1']->user_id;
-            $player2Id = $match['player2']->user_id;
-
-            // Skip if either player is already matched
-            if (in_array($player1Id, $usedPlayers) || in_array($player2Id, $usedPlayers)) {
-                continue;
-            }
-
-            // Check premium protection
-            if (!$this->canMatchPlayers($match['player1'], $match['player2'], $event)) {
-                continue;
-            }
-
-            $finalMatches[] = $match;
-            $usedPlayers[] = $player1Id;
-            $usedPlayers[] = $player2Id;
-        }
-
-        return $finalMatches;
     }
 
     /**
@@ -317,36 +384,40 @@ class MatchmakingService
     }
 
     /**
-     * Save matches to database
+     * Check if players can be matched (premium protection)
      */
-    private function saveMatches($matches, Event $event)
+    private function canMatchPremiumPlayers($player1, $player2)
     {
-        $savedMatches = [];
-
-        foreach ($matches as $match) {
-            $matchHistory = MatchHistory::create([
-                'event_id' => $event->id,
-                'sport_id' => $event->sport_id,
-                'player1_id' => $match['player1']->user_id,
-                'player2_id' => $match['player2']->user_id,
-                'match_date' => $event->event_date,
-                'match_status' => 'scheduled',
-                'court_number' => null, // Will be assigned by host
-                'estimated_duration' => $event->estimated_duration ?? 60,
-                'match_notes' => 'Auto-generated by matchmaking system'
-            ]);
-
-            $savedMatches[] = [
-                'id' => $matchHistory->id,
-                'player1' => $match['player1']->user,
-                'player2' => $match['player2']->user,
-                'compatibility_score' => $match['compatibility_score'],
-                'court_number' => null,
-                'status' => 'scheduled'
-            ];
+        // If neither player is premium, no restrictions
+        if (!$player1->is_premium && !$player2->is_premium) {
+            return true;
         }
 
-        return $savedMatches;
+        // Get sport ratings for both players
+        $rating1 = $this->getUserSportRating($player1, $participant1->event->sport_id);
+        $rating2 = $this->getUserSportRating($player2, $participant2->event->sport_id);
+
+        // Premium player protection rules
+        if ($player1->is_premium || $player2->is_premium) {
+            // MMR difference must be within 150 points for premium players
+            $mmrDiff = abs($rating1['mmr'] - $rating2['mmr']);
+            if ($mmrDiff > 150) {
+                return false;
+            }
+
+            // Must be same skill level for premium players
+            if ($rating1['level'] !== $rating2['level']) {
+                return false;
+            }
+
+            // Win rate difference must be within 20% for premium players
+            $winRateDiff = abs($rating1['win_rate'] - $rating2['win_rate']);
+            if ($winRateDiff > 20) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /**
@@ -371,7 +442,7 @@ class MatchmakingService
             ->count();
 
         $waitingPlayers = $participants->filter(function($participant) {
-            return !$participant->user->hasActiveMatch();
+            return !$participant['user']->hasActiveMatch();
         });
 
         return [
@@ -381,9 +452,9 @@ class MatchmakingService
             'can_create_matches' => $waitingPlayers->count() >= 2,
             'queue_list' => $waitingPlayers->map(function($participant) {
                 return [
-                    'user' => $participant->user,
-                    'waiting_since' => $participant->confirmed_at ?? $participant->created_at,
-                    'waiting_minutes' => Carbon::now()->diffInMinutes($participant->confirmed_at ?? $participant->created_at)
+                    'user' => $participant['user'],
+                    'waiting_since' => $participant['waiting_since'],
+                    'waiting_minutes' => Carbon::now()->diffInMinutes($participant['waiting_since'])
                 ];
             })->sortByDesc('waiting_minutes')->values()
         ];

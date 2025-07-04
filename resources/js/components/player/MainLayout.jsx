@@ -11,11 +11,13 @@ import MatchmakingStatusPage from './MatchmakingStatusPage';
 import MatchHistoryPage from './MatchHistoryPage';
 import CourtManagementPage from './CourtManagementPage';
 import FriendsPage from './FriendsPage';
+import { Link, useLocation } from 'react-router-dom';
 
 const MainLayout = ({ userType, userToken, userData, onLogout }) => {
     const [activeTab, setActiveTab] = useState('home');
     const [user, setUser] = useState(userData);
     const [currentView, setCurrentView] = useState({ page: 'home', params: null });
+    const location = useLocation();
 
     const navigationTabs = [
         { id: 'home', icon: HiHome, label: 'Beranda' },
@@ -68,6 +70,10 @@ const MainLayout = ({ userType, userToken, userData, onLogout }) => {
     const handleBack = () => {
         // Go back to the last main tab view
         setCurrentView({ page: activeTab, params: null });
+    };
+
+    const isActive = (path) => {
+        return location.pathname === path;
     };
 
     const renderContent = () => {
@@ -158,54 +164,51 @@ const MainLayout = ({ userType, userToken, userData, onLogout }) => {
     };
 
     return (
-        <div className="min-h-screen bg-secondary flex flex-col">
-            {/* Content Area */}
-            <div className="flex-1 pb-20">
+        <div className="min-h-screen bg-gray-50 pb-16">
+            {/* Main Content */}
+            <main className="pb-16">
                 {renderContent()}
-            </div>
+            </main>
 
-            {/* Bottom Navigation - Hide on detail pages */}
-            {!['eventDetail', 'communityDetail', 'matchmakingStatus', 'matchHistory', 'courtManagement'].includes(currentView.page) && (
-                <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 shadow-lg z-50">
-                    <div className="flex justify-around items-center px-2 py-3">
-                        {navigationTabs.map((tab) => {
-                            const IconComponent = tab.icon;
-                            const isActive = activeTab === tab.id;
-                            
-                            return (
-                                <button
-                                    key={tab.id}
-                                    onClick={() => handleNavigation(tab.id)}
-                                    className={`flex flex-col items-center py-1 px-3 min-w-0 flex-1 relative transition-all duration-200 ${
-                                        isActive 
-                                            ? 'text-blue-600' 
-                                            : 'text-gray-400 hover:text-gray-600 active:scale-95'
-                                    }`}
-                                >
-                                    <div className={`relative ${isActive ? 'transform -translate-y-1' : ''}`}>
-                                        <IconComponent 
-                                            className={`w-6 h-6 transition-all duration-200 ${
-                                                isActive ? 'text-blue-600' : 'text-gray-400'
-                                            }`} 
-                                        />
-                                        {isActive && (
-                                            <div className="absolute -top-1 -right-1 w-2 h-2 bg-blue-600 rounded-full"></div>
-                                        )}
-                                    </div>
-                                    <span className={`text-xs font-medium truncate mt-1 transition-all duration-200 ${
-                                        isActive ? 'text-blue-600 font-semibold' : 'text-gray-400'
-                                    }`}>
-                                        {tab.label}
-                                    </span>
-                                    {isActive && (
-                                        <div className="absolute bottom-0 w-12 h-1 bg-gradient-to-r from-blue-500 to-blue-600 rounded-full transition-all duration-200"></div>
-                                    )}
-                                </button>
-                            );
-                        })}
+            {/* Bottom Navigation */}
+            <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200">
+                <div className="max-w-md mx-auto px-4">
+                    <div className="flex justify-around py-2">
+                        {/* Home */}
+                        <Link
+                            to="/"
+                            className={`flex flex-col items-center p-2 ${
+                                isActive('/') ? 'text-blue-600' : 'text-gray-600'
+                            }`}
+                        >
+                            <HiHome className="w-6 h-6" />
+                            <span className="text-xs mt-1">Home</span>
+                        </Link>
+
+                        {/* Events */}
+                        <Link
+                            to="/events"
+                            className={`flex flex-col items-center p-2 ${
+                                isActive('/events') ? 'text-blue-600' : 'text-gray-600'
+                            }`}
+                        >
+                            <HiCalendar className="w-6 h-6" />
+                            <span className="text-xs mt-1">Events</span>
+                        </Link>
+
+                        {/* Profile */}
+                        <Link
+                            to="/profile"
+                            className={`flex flex-col items-center p-2 ${
+                                isActive('/profile') ? 'text-blue-600' : 'text-gray-600'
+                            }`}
+                        >
+                            <HiUser className="w-6 h-6" />
+                            <span className="text-xs mt-1">Profile</span>
+                        </Link>
                     </div>
                 </div>
-            )}
+            </nav>
         </div>
     );
 };
@@ -286,7 +289,7 @@ const HomePage = ({ user, userToken, onNavigate }) => {
                             joinedEventsCount = statsData.data.events.total;
                         }
                     }
-                    setStats({ joinedEvents: joinedEventsCount });
+                    setStats({ joinedEvents: joinedCount });
                 }
             }
             
@@ -466,33 +469,33 @@ const HomePage = ({ user, userToken, onNavigate }) => {
                             <HiCalendar className="w-5 h-5 text-white" />
                         </div>
                         <div className="text-xl font-bold text-gray-900">{stats?.joinedEvents || 0}</div>
-                        <div className="text-xs text-gray-600">Event Joined</div>
-                    </div>
+                    <div className="text-xs text-gray-600">Event Joined</div>
+                </div>
                     <div className="stat-card bg-white rounded-xl shadow-sm border border-gray-100 p-4 text-center hover:shadow-md transition-shadow dashboard-card">
                         <div className="stat-card-icon w-10 h-10 bg-primary rounded-lg mx-auto mb-3 flex items-center justify-center">
                             <HiUsers className="w-5 h-5 text-white" />
                         </div>
                         <div className="text-xl font-bold text-gray-900">{communities.length}</div>
-                        <div className="text-xs text-gray-600">Komunitas</div>
-                    </div>
+                    <div className="text-xs text-gray-600">Komunitas</div>
                 </div>
+            </div>
 
-                {/* Quick Actions */}
+            {/* Quick Actions */}
                 <div className="grid grid-cols-3 gap-3 mb-6">
-                    <button 
-                        onClick={() => onNavigate('discover')}
+                <button 
+                    onClick={() => onNavigate('discover')}
                         className="quick-action-btn bg-primary text-white rounded-xl p-4 flex flex-col items-center justify-center space-y-2 shadow-sm hover:shadow-md hover:bg-primary-dark transition-all"
-                    >
+                >
                         <HiSearch className="w-5 h-5" />
                         <span className="font-medium text-xs">Cari Event</span>
-                    </button>
-                    <button 
-                        onClick={() => onNavigate('events')}
+                </button>
+                <button 
+                    onClick={() => onNavigate('events')}
                         className="quick-action-btn bg-white border border-primary text-primary rounded-xl p-4 flex flex-col items-center justify-center space-y-2 shadow-sm hover:shadow-md hover:bg-primary/5 transition-all"
-                    >
+                >
                         <HiCalendar className="w-5 h-5" />
                         <span className="font-medium text-xs">Event Saya</span>
-                    </button>
+                </button>
                     <button 
                         onClick={() => onNavigate('matchmakingStatus')}
                         className="quick-action-btn bg-primary text-white rounded-xl p-4 flex flex-col items-center justify-center space-y-2 shadow-sm hover:shadow-md hover:bg-primary-dark transition-all"
@@ -512,22 +515,22 @@ const HomePage = ({ user, userToken, onNavigate }) => {
                         <button 
                             onClick={() => onNavigate('discover')}
                             className="text-primary text-sm font-medium hover:underline flex items-center"
-                        >
-                            Lihat Semua
+                    >
+                        Lihat Semua
                             <HiChevronRight className="w-4 h-4 ml-1" />
-                        </button>
-                    </div>
-                    
-                    {nearbyEvents.length > 0 ? (
+                    </button>
+                </div>
+                
+                {nearbyEvents.length > 0 ? (
                         <div className="space-y-3 event-list">
-                            {nearbyEvents.slice(0, 3).map((event) => (
+                        {nearbyEvents.slice(0, 3).map((event) => (
                                 <div 
                                     key={event.id} 
                                     className="event-card bg-white rounded-xl shadow-sm border border-gray-100 p-4 hover:shadow-md hover:border-primary/20 transition-all cursor-pointer"
                                     onClick={() => onNavigate('eventDetail', { eventId: event.id })}
                                 >
-                                    <div className="flex justify-between items-start">
-                                        <div className="flex-1">
+                                <div className="flex justify-between items-start">
+                                    <div className="flex-1">
                                             <h3 className="font-semibold text-gray-900 mb-2">{event.title}</h3>
                                             
                                             {/* Event Info Grid */}
@@ -545,7 +548,7 @@ const HomePage = ({ user, userToken, onNavigate }) => {
                                             <div className="flex items-center text-sm text-gray-500 mb-2">
                                                 <HiCalendar className="w-4 h-4 mr-2" />
                                                 <span>{new Date(event.event_date).toLocaleDateString('id-ID')}</span>
-                                            </div>
+                                    </div>
                                             <div className="flex items-center text-sm text-gray-500">
                                                 <HiLocationMarker className="w-4 h-4 mr-2" />
                                                 <span className="truncate">{event.location_name}</span>
@@ -558,12 +561,12 @@ const HomePage = ({ user, userToken, onNavigate }) => {
                                             <div className="text-xs text-gray-500 bg-gray-50 px-2 py-1 rounded">
                                                 {event.available_slots || event.max_participants} slot
                                             </div>
-                                        </div>
                                     </div>
                                 </div>
-                            ))}
-                        </div>
-                    ) : (
+                            </div>
+                        ))}
+                    </div>
+                ) : (
                         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 text-center dashboard-card">
                             <div className="w-12 h-12 bg-gray-100 rounded-lg mx-auto mb-3 flex items-center justify-center">
                                 <HiSearch className="w-6 h-6 text-gray-400" />
@@ -575,42 +578,42 @@ const HomePage = ({ user, userToken, onNavigate }) => {
                             >
                                 Jelajahi Event
                             </button>
-                        </div>
-                    )}
-                </div>
+                    </div>
+                )}
+            </div>
 
-                {/* Communities */}
-                <div>
-                    <div className="flex justify-between items-center mb-4">
+            {/* Communities */}
+            <div>
+                <div className="flex justify-between items-center mb-4">
                         <h2 className="text-lg font-semibold text-gray-900 flex items-center">
                             <HiUsers className="w-5 h-5 mr-2 text-primary" />
                             Komunitas Populer
                         </h2>
-                        <button 
-                            onClick={() => {
-                                onNavigate('discover');
-                            }}
+                    <button 
+                        onClick={() => {
+                            onNavigate('discover');
+                        }}
                             className="text-primary text-sm font-medium hover:underline flex items-center"
-                        >
-                            Lihat Semua
+                    >
+                        Lihat Semua
                             <HiChevronRight className="w-4 h-4 ml-1" />
-                        </button>
-                    </div>
-                    
-                    {communities.length > 0 ? (
-                        <div className="space-y-3">
-                            {communities.map((community) => (
+                    </button>
+                </div>
+                
+                {communities.length > 0 ? (
+                    <div className="space-y-3">
+                        {communities.map((community) => (
                                 <div 
                                     key={community.id} 
                                     className="community-card bg-white rounded-xl shadow-sm border border-gray-100 p-4 hover:shadow-md hover:border-primary/20 transition-all cursor-pointer"
                                     onClick={() => onNavigate('communityDetail', { communityId: community.id })}
                                 >
-                                    <div className="flex items-center space-x-3">
+                                <div className="flex items-center space-x-3">
                                         <div className="w-12 h-12 bg-primary rounded-lg flex items-center justify-center">
                                             <span className="text-white font-bold text-lg">{community.name.charAt(0)}</span>
-                                        </div>
-                                        <div className="flex-1">
-                                            <h3 className="font-semibold text-gray-900">{community.name}</h3>
+                                    </div>
+                                    <div className="flex-1">
+                                        <h3 className="font-semibold text-gray-900">{community.name}</h3>
                                             <div className="flex items-center text-sm text-gray-600 mt-1">
                                                 <span className="mr-2 text-primary">🏸</span>
                                                 <span className="font-medium">{community.sport?.name}</span>
@@ -618,14 +621,14 @@ const HomePage = ({ user, userToken, onNavigate }) => {
                                             <div className="flex items-center text-xs text-gray-500 mt-1">
                                                 <HiUsers className="w-3 h-3 mr-1" />
                                                 <span>{community.member_count} anggota</span>
-                                            </div>
+                                    </div>
                                         </div>
                                         <HiChevronRight className="w-5 h-5 text-gray-400" />
-                                    </div>
                                 </div>
-                            ))}
-                        </div>
-                    ) : (
+                            </div>
+                        ))}
+                    </div>
+                ) : (
                         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 text-center dashboard-card">
                             <div className="w-12 h-12 bg-gray-100 rounded-lg mx-auto mb-3 flex items-center justify-center">
                                 <HiUsers className="w-6 h-6 text-gray-400" />
@@ -637,8 +640,8 @@ const HomePage = ({ user, userToken, onNavigate }) => {
                             >
                                 Jelajahi Komunitas
                             </button>
-                        </div>
-                    )}
+                    </div>
+                )}
                 </div>
             </div>
         </div>
