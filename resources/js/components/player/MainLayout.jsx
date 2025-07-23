@@ -58,6 +58,8 @@ const MainLayout = ({ userType, userToken, userData, onLogout }) => {
         // Handle special navigation cases
         if (path === 'matchmakingStatus') {
             navigate('/player/matchmakingStatus', { state: params });
+        } else if (path === 'eventDetail') {
+            navigate('/player/eventDetail', { state: params });
         } else if (path.startsWith('/')) {
             navigate(path, { state: params });
         } else {
@@ -132,6 +134,14 @@ const MainLayout = ({ userType, userToken, userData, onLogout }) => {
                     } />
                     <Route path="/event/:eventId" element={
                         <EventDetailPage 
+                            userToken={userToken} 
+                            onNavigate={handleNavigation}
+                            onBack={handleBack}
+                        />
+                    } />
+                    <Route path="/eventDetail" element={
+                        <EventDetailPage 
+                            eventId={location.state?.eventId}
                             userToken={userToken} 
                             onNavigate={handleNavigation}
                             onBack={handleBack}
