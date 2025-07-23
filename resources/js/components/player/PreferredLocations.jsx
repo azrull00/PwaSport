@@ -24,7 +24,7 @@ const PreferredLocations = () => {
   const fetchLocations = async () => {
     try {
       setLoading(true);
-      const response = await axios.get('/api/location/preferred-areas');
+      const response = await axios.get('/location/preferred-areas');
       setLocations(response.data.data.preferred_areas);
       setMaxLocations(response.data.data.max_areas_allowed);
       setLoading(false);
@@ -57,7 +57,7 @@ const PreferredLocations = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      const response = await axios.post('/api/location/preferred-areas', {
+      const response = await axios.post('/location/preferred-areas', {
         ...formData,
         center_latitude: formData.location?.lat,
         center_longitude: formData.location?.lng
@@ -275,4 +275,4 @@ const PreferredLocations = () => {
   );
 };
 
-export default PreferredLocations; 
+export default PreferredLocations;

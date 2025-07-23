@@ -6,12 +6,18 @@ const CommunityEditModal = ({ community, onClose, onUpdate }) => {
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState(null);
 
+  // Return early if no community data
+  if (!community) {
+    console.error('No community data provided to CommunityEditModal');
+    return null;
+  }
+
   const handleSubmit = async (values) => {
     setLoading(true);
     setError(null);
 
     try {
-      const response = await axios.put(`/api/communities/${community.id}`, values);
+      const response = await axios.put(`/communities/${community.id}`, values);
       
       if (response.data.status === 'success') {
         onUpdate(response.data.data.community);
@@ -23,6 +29,23 @@ const CommunityEditModal = ({ community, onClose, onUpdate }) => {
       setLoading(false);
     }
   };
+
+  // Get default values with null checks
+  const getInitialValues = () => ({
+    name: community?.name || '',
+    description: community?.description || '',
+    community_type: community?.community_type || 'public',
+    skill_level_focus: community?.skill_level_focus || 'all',
+    venue_name: community?.venue_name || '',
+    venue_address: community?.venue_address || '',
+    venue_city: community?.venue_city || '',
+    latitude: community?.latitude || 0,
+    longitude: community?.longitude || 0,
+    regular_schedule: community?.regular_schedule || '',
+    membership_fee: community?.membership_fee || 0,
+    max_members: community?.max_members || 50,
+    is_premium_required: community?.is_premium_required || false
+  });
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
@@ -41,21 +64,7 @@ const CommunityEditModal = ({ community, onClose, onUpdate }) => {
 
         <div className="p-6">
           <CommunityForm
-            initialValues={{
-              name: community.name,
-              description: community.description,
-              community_type: community.community_type,
-              skill_level_focus: community.skill_level_focus,
-              venue_name: community.venue_name,
-              venue_address: community.venue_address,
-              venue_city: community.venue_city,
-              latitude: community.latitude,
-              longitude: community.longitude,
-              regular_schedule: community.regular_schedule || '',
-              membership_fee: community.membership_fee || 0,
-              max_members: community.max_members || 50,
-              is_premium_required: community.is_premium_required || false
-            }}
+            initialValues={getInitialValues()}
             onSubmit={handleSubmit}
             loading={loading}
             error={error}

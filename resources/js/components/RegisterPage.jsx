@@ -1,6 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 
-const RegisterPage = ({ onNavigate, userType, onLoginSuccess }) => {
+const RegisterPage = ({ onRegisterSuccess }) => {
+    const navigate = useNavigate();
+    const [userType, setUserType] = useState('player');
     const [formData, setFormData] = useState({
         name: '',
         first_name: '',
@@ -24,6 +27,18 @@ const RegisterPage = ({ onNavigate, userType, onLoginSuccess }) => {
     const [acceptedTerms, setAcceptedTerms] = useState(false);
     const [showTermsModal, setShowTermsModal] = useState(false);
     const totalSteps = 3;
+
+    // Get user type from localStorage if available
+    useEffect(() => {
+        const selectedUserType = localStorage.getItem('selectedUserType');
+        if (selectedUserType) {
+            setUserType(selectedUserType);
+            setFormData(prev => ({
+                ...prev,
+                user_type: selectedUserType
+            }));
+        }
+    }, []);
 
     const handleInputChange = (e) => {
         const { name, value } = e.target;
@@ -135,7 +150,8 @@ const RegisterPage = ({ onNavigate, userType, onLoginSuccess }) => {
 
         const requestData = {
             ...formData,
-            user_type: userType // Ensure user type is included
+            user_type: userType,
+            is_host: userType === 'host' // Explicitly set is_host flag
         };
         console.log('Registration request data:', requestData);
 
@@ -153,8 +169,23 @@ const RegisterPage = ({ onNavigate, userType, onLoginSuccess }) => {
             console.log('Registration response:', data);
 
             if (data.status === 'success') {
-                // Auto-login after successful registration
-                onLoginSuccess(data.data.token, data.data.user, userType);
+                // Determine user type from server response
+                const serverUserType = data.data.user.is_host ? 'host' : 'player';
+                console.log('Server determined user type:', serverUserType);
+                
+                // Store auth data in localStorage
+                localStorage.setItem('authToken', data.data.token);
+                localStorage.setItem('userData', JSON.stringify(data.data.user));
+                localStorage.setItem('userType', serverUserType);
+                
+                // Call onRegisterSuccess with the server-determined user type
+                // Check if onRegisterSuccess is provided before calling it
+                if (typeof onRegisterSuccess === 'function') {
+                    onRegisterSuccess(serverUserType, data.data.token, data.data.user);
+                }
+                
+                // Navigate based on server-determined user type
+                navigate(serverUserType === 'host' ? '/host' : '/player');
             } else {
                 console.error('Registration failed:', data);
                 if (data.errors) {
@@ -486,7 +517,7 @@ const RegisterPage = ({ onNavigate, userType, onLoginSuccess }) => {
             {/* Header */}
             <div className="flex items-center justify-between p-6">
                 <button 
-                    onClick={() => currentStep === 1 ? onNavigate('onboarding') : handlePrevious()}
+                                            onClick={() => currentStep === 1 ? navigate('/onboarding') : handlePrevious()}
                     className="text-gray-600 hover:text-gray-800 transition-colors"
                 >
                     <span className="text-2xl">←</span>
@@ -512,7 +543,7 @@ const RegisterPage = ({ onNavigate, userType, onLoginSuccess }) => {
                 {/* Change User Type Link */}
                 <div className="text-center mt-3">
                     <button
-                        onClick={() => onNavigate('onboarding')}
+                        onClick={() => navigate('/onboarding')}
                         className="text-gray-500 text-sm hover:text-gray-700 transition-colors"
                     >
                         Ingin daftar sebagai {userType === 'player' ? 'Host' : 'Player'}?
@@ -593,7 +624,7 @@ const RegisterPage = ({ onNavigate, userType, onLoginSuccess }) => {
                         <p className="text-gray-600 text-sm">
                             Sudah punya akun {userTypeInfo.title}?{' '}
                             <button
-                                onClick={() => onNavigate('login', userType)}
+                                onClick={() => navigate('/login')}
                                 className="text-primary hover:text-primary-dark font-medium transition-colors"
                             >
                                 Masuk di sini

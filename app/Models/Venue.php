@@ -20,7 +20,7 @@ class Venue extends Model
         'country',
         'latitude',
         'longitude',
-        'total_courts',
+        'courts_count',
         'court_type',
         'hourly_rate',
         'facilities',
@@ -104,7 +104,7 @@ class Venue extends Model
             ->where('status', '!=', 'cancelled')
             ->sum('courts_used');
 
-        return ($this->total_courts - $conflictingEvents) >= $courtsNeeded;
+        return ($this->courts_count - $conflictingEvents) >= $courtsNeeded;
     }
 
     public function getAvailableCourtsOn($date)
@@ -114,7 +114,7 @@ class Venue extends Model
             ->where('status', '!=', 'cancelled')
             ->sum('courts_used');
 
-        return $this->total_courts - $usedCourts;
+        return $this->courts_count - $usedCourts;
     }
 
     public function updateAverageRating()

@@ -66,55 +66,62 @@ class HostController extends Controller
 
     public function getHostAnalytics(Request $request)
     {
-        $user = Auth::user();
-        $timeframe = $request->input('timeframe', '30days');
+        try {
+            $user = Auth::user();
+            $timeframe = $request->input('timeframe', '30days');
 
-        // Get communities and events
-        $communities = Community::where('host_id', $user->id)->get();
-        $events = Event::where('host_id', $user->id);
+            // Get communities and events
+            $communities = Community::where('host_id', $user->id)->get();
+            $events = Event::where('host_id', $user->id);
 
-        // Apply timeframe filter
-        switch ($timeframe) {
-            case '7days':
-                $events = $events->where('created_at', '>=', now()->subDays(7));
-                break;
-            case '30days':
-                $events = $events->where('created_at', '>=', now()->subDays(30));
-                break;
-            case '90days':
-                $events = $events->where('created_at', '>=', now()->subDays(90));
-                break;
+            // Apply timeframe filter
+            switch ($timeframe) {
+                case '7days':
+                    $events = $events->where('created_at', '>=', now()->subDays(7));
+                    break;
+                case '30days':
+                    $events = $events->where('created_at', '>=', now()->subDays(30));
+                    break;
+                case '90days':
+                    $events = $events->where('created_at', '>=', now()->subDays(90));
+                    break;
+            }
+
+            $events = $events->get();
+
+            // Calculate analytics
+            $analytics = [
+                'eventStats' => [
+                    'total' => $events->count(),
+                    'active' => $events->where('status', 'active')->count(),
+                    'completed' => $events->where('status', 'completed')->count(),
+                    'cancelled' => $events->where('status', 'cancelled')->count(),
+                ],
+                'communityStats' => [
+                    'total' => $communities->count(),
+                    'totalMembers' => CommunityMember::whereIn('community_id', $communities->pluck('id'))->count(),
+                    'averageRating' => $communities->avg('rating') ?? 0,
+                ],
+                'participationRate' => $this->calculateParticipationRate($events),
+                'growth' => [
+                    'events' => $this->calculateGrowthRate($events, $timeframe),
+                    'members' => $this->calculateMemberGrowthRate($communities, $timeframe),
+                ]
+            ];
+
+            return response()->json([
+                'status' => 'success',
+                'data' => [
+                    'analytics' => $analytics,
+                    'timeframe' => $timeframe
+                ]
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Gagal mengambil data analytics: ' . $e->getMessage()
+            ], 500);
         }
-
-        $events = $events->get();
-
-        // Calculate analytics
-        $analytics = [
-            'eventStats' => [
-                'total' => $events->count(),
-                'active' => $events->where('status', 'active')->count(),
-                'completed' => $events->where('status', 'completed')->count(),
-                'cancelled' => $events->where('status', 'cancelled')->count(),
-            ],
-            'communityStats' => [
-                'total' => $communities->count(),
-                'totalMembers' => CommunityMember::whereIn('community_id', $communities->pluck('id'))->count(),
-                'averageRating' => $communities->avg('rating') ?? 0,
-            ],
-            'participationRate' => $this->calculateParticipationRate($events),
-            'growth' => [
-                'events' => $this->calculateGrowthRate($events, $timeframe),
-                'members' => $this->calculateMemberGrowthRate($communities, $timeframe),
-            ]
-        ];
-
-        return response()->json([
-            'status' => 'success',
-            'data' => [
-                'analytics' => $analytics,
-                'timeframe' => $timeframe
-            ]
-        ]);
     }
 
     private function calculateParticipationRate($events)
@@ -1020,4 +1027,4 @@ class HostController extends Controller
             ]
         ]);
     }
-} 
+}

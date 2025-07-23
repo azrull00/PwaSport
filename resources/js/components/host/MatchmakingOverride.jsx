@@ -48,7 +48,7 @@ const MatchmakingOverride = ({ userToken, eventId }) => {
     const loadParticipants = async () => {
         try {
             setLoading(true);
-            const response = await fetch(`/api/host/matchmaking/${eventId}/participants`, {
+            const response = await fetch(`/host/matchmaking/${eventId}/participants`, {
                 headers: {
                     'Authorization': `Bearer ${userToken}`,
                     'Accept': 'application/json'
@@ -84,7 +84,7 @@ const MatchmakingOverride = ({ userToken, eventId }) => {
 
     const loadCurrentMatches = async () => {
         try {
-            const response = await fetch(`/api/host/matchmaking/${eventId}/matches`, {
+            const response = await fetch(`/host/matchmaking/${eventId}/matches`, {
                 headers: {
                     'Authorization': `Bearer ${userToken}`,
                     'Accept': 'application/json'
@@ -147,7 +147,7 @@ const MatchmakingOverride = ({ userToken, eventId }) => {
         }
 
         try {
-            const response = await fetch(`/api/host/matchmaking/${eventId}/override`, {
+            const response = await fetch(`/host/matchmaking/${eventId}/override`, {
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${userToken}`,
@@ -181,7 +181,7 @@ const MatchmakingOverride = ({ userToken, eventId }) => {
         }
 
         try {
-            const response = await fetch(`/api/host/matchmaking/${eventId}/matches/${matchId}/lock`, {
+            const response = await fetch(`/host/matchmaking/${eventId}/matches/${matchId}/lock`, {
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${userToken}`,
@@ -485,4 +485,4 @@ const MatchmakingOverride = ({ userToken, eventId }) => {
     );
 };
 
-export default MatchmakingOverride; 
+export default MatchmakingOverride;

@@ -1,5 +1,8 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
+import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
+import axios from 'axios';
+import { Toaster } from 'react-hot-toast';
 
 // Import bootstrap after React components
 import './bootstrap';
@@ -9,169 +12,196 @@ import OnboardingPage from './components/OnboardingPage';
 import LoginPage from './components/LoginPage';
 import RegisterPage from './components/RegisterPage';
 import MainLayout from './components/player/MainLayout';
+import HostLayout from './components/host/HostLayout';
 
-// Main App Component
-function App() {
-    const [currentPage, setCurrentPage] = React.useState('onboarding');
-    const [userType, setUserType] = React.useState(null); // 'player' or 'host'
-    const [userToken, setUserToken] = React.useState(null);
-    const [userData, setUserData] = React.useState(null);
-    const [isAuthenticated, setIsAuthenticated] = React.useState(false);
+// Configure axios defaults
+axios.defaults.baseURL = '/api';
+axios.defaults.headers.common['Accept'] = 'application/json';
+axios.defaults.headers.common['Content-Type'] = 'application/json';
 
-    // Handle page navigation
-    const navigateTo = React.useCallback((page, type = null) => {
-        setCurrentPage(page);
-        if (type) setUserType(type);
-    }, []);
+// Add axios interceptors
+axios.interceptors.request.use(
+    config => {
+        const token = localStorage.getItem('userToken');
+        if (token) {
+            config.headers.Authorization = `Bearer ${token}`;
+        }
+        return config;
+    },
+    error => {
+        return Promise.reject(error);
+    }
+);
 
-    // Handle successful login
-    const handleLoginSuccess = React.useCallback((token, user, type) => {
-        setUserToken(token);
-        setUserData(user);
-        setUserType(type);
-        setIsAuthenticated(true);
-        setCurrentPage('dashboard');
-        
-        // Store in localStorage for persistence
-        localStorage.setItem('userToken', token);
-        localStorage.setItem('userData', JSON.stringify(user));
-        localStorage.setItem('userType', type);
-    }, []);
-
-    // Handle logout
-    const handleLogout = React.useCallback(async () => {
-        try {
-            if (userToken) {
-                await fetch('/api/auth/logout', {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${userToken}`,
-                        'Content-Type': 'application/json',
-                        'Accept': 'application/json'
-                    }
-                });
-            }
-        } catch (error) {
-            console.error('Logout error:', error);
-        } finally {
-            // Clear state and localStorage
-            setUserToken(null);
-            setUserData(null);
-            setUserType(null);
-            setIsAuthenticated(false);
-            setCurrentPage('onboarding');
-            
+axios.interceptors.response.use(
+    response => response,
+    error => {
+        if (error.response?.status === 401) {
             localStorage.removeItem('userToken');
             localStorage.removeItem('userData');
             localStorage.removeItem('userType');
+            window.location.href = '/login';
         }
-    }, [userToken]);
+        return Promise.reject(error);
+    }
+);
 
-    // Check for existing authentication on page load
-    React.useEffect(() => {
-        const storedToken = localStorage.getItem('userToken');
-        const storedUserData = localStorage.getItem('userData');
-        const storedUserType = localStorage.getItem('userType');
+// Main App Component
+function App() {
+    const navigate = useNavigate();
+    const [userType, setUserType] = React.useState(localStorage.getItem('userType'));
+    const [userToken, setUserToken] = React.useState(localStorage.getItem('userToken'));
+    const [userData, setUserData] = React.useState(
+        localStorage.getItem('userData') ? JSON.parse(localStorage.getItem('userData')) : null
+    );
 
-        if (storedToken && storedUserData && storedUserType) {
-            try {
-                const parsedUserData = JSON.parse(storedUserData);
-                setUserToken(storedToken);
-                setUserData(parsedUserData);
-                setUserType(storedUserType);
-                setIsAuthenticated(true);
-                setCurrentPage('dashboard');
-            } catch (error) {
-                console.error('Error parsing stored user data:', error);
-                // Clear corrupted data
-                localStorage.removeItem('userToken');
-                localStorage.removeItem('userData');
-                localStorage.removeItem('userType');
-            }
-        }
-    }, []);
+    const handleLoginSuccess = (type, token, data) => {
+        console.log('Login success - User type:', type, 'Is host:', data.is_host);
+        setUserType(type);
+        setUserToken(token);
+        setUserData(data);
+        localStorage.setItem('userType', type);
+        localStorage.setItem('userToken', token);
+        localStorage.setItem('userData', JSON.stringify(data));
+        navigate(type === 'host' ? '/host' : '/player');
+    };
 
-    // Render current page based on state
-    const renderCurrentPage = React.useCallback(() => {
-        // If authenticated, show dashboard
-        if (isAuthenticated && currentPage === 'dashboard') {
-            if (userType === 'player') {
-                return React.createElement(MainLayout, { 
-                    userType, 
-                    userToken, 
-                    userData, 
-                    onLogout: handleLogout 
-                });
-            } else {
-                // TODO: Host dashboard
-                return React.createElement('div', { className: 'p-6' }, [
-                    React.createElement('h1', { key: 'title', className: 'text-2xl font-bold' }, 'Host Dashboard'),
-                    React.createElement('p', { key: 'message' }, 'Coming soon...'),
-                    React.createElement('button', { 
-                        key: 'logout',
-                        onClick: handleLogout,
-                        className: 'mt-4 bg-red-500 text-white px-4 py-2 rounded'
-                    }, 'Logout')
-                ]);
-            }
-        }
+    const handleLogout = () => {
+        localStorage.removeItem('userToken');
+        localStorage.removeItem('userData');
+        localStorage.removeItem('userType');
+        setUserType(null);
+        setUserToken(null);
+        setUserData(null);
+        navigate('/login');
+    };
 
-        switch (currentPage) {
-            case 'onboarding':
-                return React.createElement(OnboardingPage, { onNavigate: navigateTo });
-            case 'login':
-                return React.createElement(LoginPage, { 
-                    onNavigate: navigateTo, 
-                    userType,
-                    onLoginSuccess: handleLoginSuccess
-                });
-            case 'register':
-                return React.createElement(RegisterPage, { 
-                    onNavigate: navigateTo, 
-                    userType,
-                    onLoginSuccess: handleLoginSuccess
-                });
-            default:
-                return React.createElement(OnboardingPage, { onNavigate: navigateTo });
-        }
-    }, [currentPage, userType, isAuthenticated, userToken, userData, navigateTo, handleLoginSuccess, handleLogout]);
-
-    return React.createElement('div', { 
-        className: 'min-h-screen bg-secondary' 
-    }, renderCurrentPage());
+    return (
+        <>
+            <Toaster position="top-right" />
+            <Routes>
+                <Route
+                    path="/"
+                    element={
+                        userToken ? (
+                            <Navigate to={userType === 'host' ? '/host' : '/player'} />
+                        ) : (
+                            <Navigate to="/onboarding" />
+                        )
+                    }
+                />
+                <Route
+                    path="/onboarding"
+                    element={
+                        userToken ? (
+                            <Navigate to={userType === 'host' ? '/host' : '/player'} />
+                        ) : (
+                            <OnboardingPage />
+                        )
+                    }
+                />
+                <Route
+                    path="/login"
+                    element={
+                        userToken ? (
+                            <Navigate to={userType === 'host' ? '/host' : '/player'} />
+                        ) : (
+                            <LoginPage onLoginSuccess={handleLoginSuccess} />
+                        )
+                    }
+                />
+                <Route
+                    path="/register"
+                    element={
+                        userToken ? (
+                            <Navigate to={userType === 'host' ? '/host' : '/player'} />
+                        ) : (
+                            <RegisterPage onRegisterSuccess={handleLoginSuccess} />
+                        )
+                    }
+                />
+                <Route
+                    path="/host/*"
+                    element={
+                        userToken && userType === 'host' ? (
+                            <HostLayout
+                                userToken={userToken}
+                                userData={userData}
+                                onLogout={handleLogout}
+                            />
+                        ) : (
+                            <Navigate to="/login" />
+                        )
+                    }
+                />
+                <Route
+                    path="/player/*"
+                    element={
+                        userToken && userType === 'player' ? (
+                            <MainLayout
+                                userToken={userToken}
+                                userData={userData}
+                                onLogout={handleLogout}
+                            />
+                        ) : (
+                            <Navigate to="/login" />
+                        )
+                    }
+                />
+            </Routes>
+        </>
+    );
 }
 
-// Initialize React app with error boundary
-function AppWithErrorBoundary() {
-    const [hasError, setHasError] = React.useState(false);
-
-    React.useEffect(() => {
-        const handleError = (error) => {
-            console.error('React Error:', error);
-            setHasError(true);
-        };
-
-        window.addEventListener('error', handleError);
-        return () => window.removeEventListener('error', handleError);
-    }, []);
-
-    if (hasError) {
-        return React.createElement('div', { 
-            style: { padding: '20px', textAlign: 'center' } 
-        }, [
-            React.createElement('h1', { key: 'title' }, 'Something went wrong'),
-            React.createElement('p', { key: 'message' }, 'Please refresh the page')
-        ]);
+// Error Boundary Component
+class ErrorBoundary extends React.Component {
+    constructor(props) {
+        super(props);
+        this.state = { hasError: false };
     }
 
-    return React.createElement(App);
+    static getDerivedStateFromError(error) {
+        return { hasError: true };
+    }
+
+    componentDidCatch(error, errorInfo) {
+        console.error('Error caught by boundary:', error, errorInfo);
+    }
+
+    render() {
+        if (this.state.hasError) {
+            return (
+                <div className="min-h-screen flex items-center justify-center bg-gray-50">
+                    <div className="text-center">
+                        <h1 className="text-2xl font-bold text-red-600 mb-4">Something went wrong</h1>
+                        <button
+                            onClick={() => window.location.reload()}
+                            className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+                        >
+                            Refresh Page
+                        </button>
+                    </div>
+                </div>
+            );
+        }
+
+        return this.props.children;
+    }
 }
 
-// Initialize React app
-const container = document.getElementById('app');
-if (container) {
-    const root = createRoot(container);
-    root.render(React.createElement(AppWithErrorBoundary));
-} else {
-    console.error('Could not find app container element');
+// Wrap App with ErrorBoundary
+const AppWithErrorBoundary = () => (
+    <ErrorBoundary>
+        <App />
+    </ErrorBoundary>
+);
+
+// Mount the app
+if (document.getElementById('app')) {
+    const root = createRoot(document.getElementById('app'));
+    root.render(
+        <BrowserRouter>
+            <AppWithErrorBoundary />
+        </BrowserRouter>
+    );
 } 

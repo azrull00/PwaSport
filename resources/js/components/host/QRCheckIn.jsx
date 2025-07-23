@@ -2,18 +2,21 @@ import React, { useState, useEffect } from 'react';
 import { QrReader } from 'react-qr-reader';
 import axios from 'axios';
 import { useParams } from 'react-router-dom';
-import { toast } from 'react-toastify';
+import { toast } from 'react-hot-toast';
 
-const QRCheckIn = () => {
+const QRCheckIn = ({ eventId, onSuccessfulCheckIn }) => {
     const [scanning, setScanning] = useState(false);
     const [cameraError, setCameraError] = useState(null);
     const [recentScans, setRecentScans] = useState([]);
-    const { eventId } = useParams();
+    
+    // Fallback to useParams if eventId is not provided as prop
+    const { eventId: paramEventId } = useParams();
+    const currentEventId = eventId || paramEventId;
 
     const handleScan = async (data) => {
-        if (data) {
+        if (data && currentEventId) {
             try {
-                const response = await axios.post(`/api/host/events/${eventId}/check-in/qr`, {
+                const response = await axios.post(`/host/events/${currentEventId}/check-in/qr`, {
                     qr_code: data,
                     check_in_type: 'participant' // Default to participant, will be overridden by QR data
                 });
@@ -26,6 +29,11 @@ const QRCheckIn = () => {
                         message: response.data.message,
                         data: response.data.data
                     }, ...prev].slice(0, 10)); // Keep last 10 scans
+                    
+                    // Call the callback function if provided
+                    if (onSuccessfulCheckIn) {
+                        onSuccessfulCheckIn(response.data.data);
+                    }
                 }
             } catch (error) {
                 toast.error(error.response?.data?.message || 'Failed to process QR code');
@@ -50,6 +58,17 @@ const QRCheckIn = () => {
         }
     };
 
+    if (!currentEventId) {
+        return (
+            <div className="p-4">
+                <div className="text-center py-8">
+                    <div className="text-red-500 text-lg">Error: Event ID tidak ditemukan</div>
+                    <p className="text-gray-600 mt-2">Silakan pilih event terlebih dahulu</p>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className="p-4">
             <h2 className="text-2xl font-bold mb-4">QR Code Check-in</h2>
@@ -71,12 +90,19 @@ const QRCheckIn = () => {
                 <div className="mb-6">
                     <div className="max-w-md mx-auto border-4 border-blue-500 rounded-lg overflow-hidden">
                         <QrReader
-                            onResult={handleScan}
-                            onError={handleError}
+                            onResult={(result, error) => {
+                                if (!!result) {
+                                    handleScan(result?.text);
+                                }
+                                if (!!error) {
+                                    handleError(error);
+                                }
+                            }}
                             constraints={{
                                 facingMode: 'environment'
                             }}
                             className="w-full"
+                            style={{ width: '100%' }}
                         />
                     </div>
                     {cameraError && (
@@ -133,4 +159,4 @@ const QRCheckIn = () => {
     );
 };
 
-export default QRCheckIn; 
+export default QRCheckIn;

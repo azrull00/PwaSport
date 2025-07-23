@@ -17,7 +17,7 @@ return new class extends Migration
             $table->integer('skill_level')->default(0);
             $table->integer('estimated_mmr')->default(1000);
             $table->timestamp('checked_in_at')->nullable();
-            $table->timestamp('expires_at');
+            $table->timestamp('expires_at')->nullable();
             $table->softDeletes();
             $table->timestamps();
         });
@@ -49,4 +49,4 @@ return new class extends Migration
 
         Schema::dropIfExists('guest_players');
     }
-}; 
+};

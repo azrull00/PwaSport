@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 
-const OnboardingPage = ({ onNavigate }) => {
+const OnboardingPage = () => {
+    const navigate = useNavigate();
     const [currentSlide, setCurrentSlide] = useState(0);
     const [showUserTypeSelection, setShowUserTypeSelection] = useState(false);
 
@@ -78,7 +80,15 @@ const OnboardingPage = ({ onNavigate }) => {
     };
 
     const handleUserTypeSelection = (action, userType) => {
-        onNavigate(action, userType);
+        // Store user type selection in localStorage for the target page
+        localStorage.setItem('selectedUserType', userType);
+        
+        // Navigate to the appropriate page
+        if (action === 'login') {
+            navigate('/login');
+        } else if (action === 'register') {
+            navigate('/register');
+        }
     };
 
     const isLastSlide = currentSlide === slides.length - 1;

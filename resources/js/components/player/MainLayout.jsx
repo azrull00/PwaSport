@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { HiHome, HiSearch, HiCalendar, HiUsers, HiChatAlt2, HiUser, HiTrendingUp, HiStar, HiChevronRight, HiLocationMarker, HiClock } from 'react-icons/hi';
 import { HiMiniArrowLeft } from 'react-icons/hi2';
+import { Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom';
 import DiscoveryPage from './DiscoveryPage';
 import MyEventsPage from './MyEventsPage';
 import ChatPage from './ChatPage';
@@ -11,21 +12,18 @@ import MatchmakingStatusPage from './MatchmakingStatusPage';
 import MatchHistoryPage from './MatchHistoryPage';
 import CourtManagementPage from './CourtManagementPage';
 import FriendsPage from './FriendsPage';
-import { Link, useLocation } from 'react-router-dom';
 
 const MainLayout = ({ userType, userToken, userData, onLogout }) => {
-    const [activeTab, setActiveTab] = useState('home');
     const [user, setUser] = useState(userData);
-    const [currentView, setCurrentView] = useState({ page: 'home', params: null });
     const location = useLocation();
+    const navigate = useNavigate();
 
     const navigationTabs = [
-        { id: 'home', icon: HiHome, label: 'Beranda' },
-        { id: 'discover', icon: HiSearch, label: 'Jelajah' },
-        { id: 'events', icon: HiCalendar, label: 'Event Saya' },
-        { id: 'friends', icon: HiUsers, label: 'Teman' },
-        { id: 'chat', icon: HiChatAlt2, label: 'Chat' },
-        { id: 'profile', icon: HiUser, label: 'Profil' }
+        { id: 'home', icon: HiHome, label: 'Beranda', path: '/dashboard' },
+        { id: 'discover', icon: HiSearch, label: 'Jelajah', path: '/dashboard/discover' },
+        { id: 'events', icon: HiCalendar, label: 'Event Saya', path: '/dashboard/events' },
+        { id: 'chat', icon: HiChatAlt2, label: 'Chat & Teman', path: '/dashboard/chat' },
+        { id: 'profile', icon: HiUser, label: 'Profil', path: '/dashboard/profile' }
     ];
 
     // Fetch updated user profile
@@ -56,156 +54,130 @@ const MainLayout = ({ userType, userToken, userData, onLogout }) => {
         }
     }, [userToken]);
 
-    const handleNavigation = (page, params = null) => {
-        if (page === 'eventDetail' || page === 'communityDetail' || page === 'matchmakingStatus' || page === 'matchHistory') {
-            // For detail pages, don't change activeTab but update currentView
-            setCurrentView({ page, params });
-        } else {
-            // For main pages, set both activeTab and currentView
-            setActiveTab(page);
-            setCurrentView({ page, params });
-        }
+    const handleNavigation = (path, params = {}) => {
+        navigate(path, { state: params });
     };
 
     const handleBack = () => {
-        // Go back to the last main tab view
-        setCurrentView({ page: activeTab, params: null });
+        navigate(-1);
     };
 
     const isActive = (path) => {
         return location.pathname === path;
     };
 
-    const renderContent = () => {
-        switch (currentView.page) {
-            case 'home':
-                return <HomePage user={user} userToken={userToken} onNavigate={handleNavigation} />;
-            case 'discover':
-                return <DiscoveryPage userToken={userToken} onNavigate={handleNavigation} />;
-            case 'events':
-                return <MyEventsPage user={user} userToken={userToken} onNavigate={handleNavigation} />;
-            case 'friends':
-                return <FriendsPage 
-                    userToken={userToken} 
-                    onNavigate={handleNavigation}
-                    onStartPrivateChat={(userId) => {
-                        handleNavigation('chat');
-                        // We'll need to pass this to ChatPage somehow
-                        setTimeout(() => {
-                            // Trigger private chat start
-                            window.dispatchEvent(new CustomEvent('startPrivateChat', { detail: { userId } }));
-                        }, 100);
-                    }}
-                />;
-            case 'chat':
-                return <ChatPage user={user} userToken={userToken} />;
-            case 'profile':
-                return <ProfilePage 
-                    user={user} 
-                    userToken={userToken} 
-                    onLogout={onLogout} 
-                    onUserUpdate={setUser} 
-                    onNavigate={handleNavigation}
-                    onStartPrivateChat={(userId) => {
-                        handleNavigation('chat');
-                        setTimeout(() => {
-                            window.dispatchEvent(new CustomEvent('startPrivateChat', { detail: { userId } }));
-                        }, 100);
-                    }}
-                />;
-            case 'eventDetail':
-                return (
-                    <EventDetailPage 
-                        eventId={currentView.params?.eventId} 
-                        userToken={userToken} 
-                        onNavigate={handleNavigation}
-                        onBack={handleBack}
-                    />
-                );
-            case 'communityDetail':
-                return (
-                    <CommunityDetailPage 
-                        communityId={currentView.params?.communityId} 
-                        userToken={userToken} 
-                        onNavigate={handleNavigation}
-                        onBack={handleBack}
-                    />
-                );
-            case 'matchmakingStatus':
-                return (
-                    <MatchmakingStatusPage 
-                        userToken={userToken} 
-                        onNavigate={handleNavigation}
-                        onBack={handleBack}
-                        eventId={currentView.params?.eventId}
-                    />
-                );
-            case 'matchHistory':
-                return (
-                    <MatchHistoryPage 
-                        userToken={userToken} 
-                        onNavigate={handleNavigation}
-                        onBack={handleBack}
-                    />
-                );
-            case 'courtManagement':
-                return (
-                    <CourtManagementPage 
-                        eventId={currentView.params?.eventId}
-                        userToken={userToken}
-                        userType={userType}
-                        onNavigate={handleNavigation}
-                        onBack={handleBack}
-                    />
-                );
-            default:
-                return <HomePage user={user} userToken={userToken} onNavigate={handleNavigation} />;
-        }
-    };
-
     return (
         <div className="min-h-screen bg-gray-50 pb-16">
             {/* Main Content */}
             <main className="pb-16">
-                {renderContent()}
+                <Routes>
+                    <Route path="/" element={<HomePage user={user} userToken={userToken} onNavigate={handleNavigation} />} />
+                    <Route path="/discover" element={<DiscoveryPage userToken={userToken} onNavigate={handleNavigation} />} />
+                    <Route path="/events" element={<MyEventsPage user={user} userToken={userToken} onNavigate={handleNavigation} />} />
+                    <Route path="/chat" element={
+                        <div>
+                            <div className="flex justify-between items-center p-4 bg-white shadow">
+                                <button
+                                    className={`flex-1 py-2 px-4 text-center ${location.state?.showFriends ? 'text-gray-600' : 'text-primary border-b-2 border-primary'}`}
+                                    onClick={() => navigate('/dashboard/chat', { state: { showFriends: false } })}
+                                >
+                                    <HiChatAlt2 className="w-6 h-6 mx-auto" />
+                                    <span className="text-sm">Chat</span>
+                                </button>
+                                <button
+                                    className={`flex-1 py-2 px-4 text-center ${location.state?.showFriends ? 'text-primary border-b-2 border-primary' : 'text-gray-600'}`}
+                                    onClick={() => navigate('/dashboard/chat', { state: { showFriends: true } })}
+                                >
+                                    <HiUsers className="w-6 h-6 mx-auto" />
+                                    <span className="text-sm">Teman</span>
+                                </button>
+                            </div>
+                            {location.state?.showFriends ? (
+                                <FriendsPage 
+                                    userToken={userToken} 
+                                    onNavigate={handleNavigation}
+                                    onStartPrivateChat={(userId) => {
+                                        navigate('/dashboard/chat', { state: { showFriends: false } });
+                                        setTimeout(() => {
+                                            window.dispatchEvent(new CustomEvent('startPrivateChat', { detail: { userId } }));
+                                        }, 100);
+                                    }}
+                                />
+                            ) : (
+                                <ChatPage user={user} userToken={userToken} />
+                            )}
+                        </div>
+                    } />
+                    <Route path="/profile" element={
+                        <ProfilePage 
+                            user={user} 
+                            userToken={userToken} 
+                            onLogout={onLogout} 
+                            onUserUpdate={setUser} 
+                            onNavigate={handleNavigation}
+                            onStartPrivateChat={(userId) => {
+                                navigate('/dashboard/chat', { state: { showFriends: false } });
+                                setTimeout(() => {
+                                    window.dispatchEvent(new CustomEvent('startPrivateChat', { detail: { userId } }));
+                                }, 100);
+                            }}
+                        />
+                    } />
+                    <Route path="/event/:eventId" element={
+                        <EventDetailPage 
+                            userToken={userToken} 
+                            onNavigate={handleNavigation}
+                            onBack={handleBack}
+                        />
+                    } />
+                    <Route path="/community/:communityId" element={
+                        <CommunityDetailPage 
+                            userToken={userToken} 
+                            onNavigate={handleNavigation}
+                            onBack={handleBack}
+                        />
+                    } />
+                    <Route path="/matchmaking/:eventId" element={
+                        <MatchmakingStatusPage 
+                            userToken={userToken} 
+                            onNavigate={handleNavigation}
+                            onBack={handleBack}
+                        />
+                    } />
+                    <Route path="/match-history" element={
+                        <MatchHistoryPage 
+                            userToken={userToken} 
+                            onNavigate={handleNavigation}
+                            onBack={handleBack}
+                        />
+                    } />
+                    <Route path="/court-management/:eventId" element={
+                        <CourtManagementPage 
+                            userToken={userToken}
+                            userType={userType}
+                            onNavigate={handleNavigation}
+                            onBack={handleBack}
+                        />
+                    } />
+                </Routes>
             </main>
 
             {/* Bottom Navigation */}
             <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200">
                 <div className="max-w-md mx-auto px-4">
                     <div className="flex justify-around py-2">
-                        {/* Home */}
-                        <Link
-                            to="/"
-                            className={`flex flex-col items-center p-2 ${
-                                isActive('/') ? 'text-blue-600' : 'text-gray-600'
-                            }`}
-                        >
-                            <HiHome className="w-6 h-6" />
-                            <span className="text-xs mt-1">Home</span>
-                        </Link>
-
-                        {/* Events */}
-                        <Link
-                            to="/events"
-                            className={`flex flex-col items-center p-2 ${
-                                isActive('/events') ? 'text-blue-600' : 'text-gray-600'
-                            }`}
-                        >
-                            <HiCalendar className="w-6 h-6" />
-                            <span className="text-xs mt-1">Events</span>
-                        </Link>
-
-                        {/* Profile */}
-                        <Link
-                            to="/profile"
-                            className={`flex flex-col items-center p-2 ${
-                                isActive('/profile') ? 'text-blue-600' : 'text-gray-600'
-                            }`}
-                        >
-                            <HiUser className="w-6 h-6" />
-                            <span className="text-xs mt-1">Profile</span>
-                        </Link>
+                        {navigationTabs.map(tab => (
+                            <Link
+                                key={tab.id}
+                                to={tab.path}
+                                className={`flex flex-col items-center p-2 ${
+                                    isActive(tab.path) ? 'text-blue-600' : 'text-gray-600'
+                                }`}
+                            >
+                                <tab.icon className="w-6 h-6" />
+                                <span className="text-xs mt-1">{tab.label}</span>
+                            </Link>
+                        ))}
                     </div>
                 </div>
             </nav>
@@ -289,7 +261,7 @@ const HomePage = ({ user, userToken, onNavigate }) => {
                             joinedEventsCount = statsData.data.events.total;
                         }
                     }
-                    setStats({ joinedEvents: joinedCount });
+                    setStats({ joinedEvents: joinedEventsCount });
                 }
             }
             

@@ -26,7 +26,7 @@ const GuestPlayerManagement = ({ eventId, onGuestAdded }) => {
     const fetchGuestPlayers = async (showLoading = false) => {
         if (showLoading) setRefreshing(true);
         try {
-            const response = await axios.get(`/api/events/${eventId}/guest-players`);
+            const response = await axios.get(`/host/events/${eventId}/guest-players`);
             setGuestPlayers(response.data.guests);
         } catch (error) {
             toast.error('Failed to load guest players');
@@ -59,7 +59,7 @@ const GuestPlayerManagement = ({ eventId, onGuestAdded }) => {
     const handleSubmit = async (e) => {
         e.preventDefault();
         try {
-            const response = await axios.post(`/api/events/${eventId}/guest-players`, newGuest);
+            const response = await axios.post(`/host/events/${eventId}/guest-players`, newGuest);
             toast.success('Guest player added successfully');
             setGuestPlayers([...guestPlayers, response.data.guest]);
             onGuestAdded(response.data.guest);
@@ -79,7 +79,7 @@ const GuestPlayerManagement = ({ eventId, onGuestAdded }) => {
         if (!confirm('Are you sure you want to remove this guest player?')) return;
         
         try {
-            await axios.delete(`/api/events/${eventId}/guest-players/${guestId}`);
+            await axios.delete(`/host/events/${eventId}/guest-players/${guestId}`);
             toast.success('Guest player removed successfully');
             setGuestPlayers(guestPlayers.filter(guest => guest.id !== guestId));
         } catch (error) {
@@ -308,4 +308,4 @@ const GuestPlayerManagement = ({ eventId, onGuestAdded }) => {
     );
 };
 
-export default GuestPlayerManagement; 
+export default GuestPlayerManagement;

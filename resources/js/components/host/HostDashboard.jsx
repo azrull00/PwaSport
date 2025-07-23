@@ -5,7 +5,7 @@ import CourtManagement from './CourtManagement';
 import MatchmakingMonitor from './MatchmakingMonitor';
 import DashboardStats from './DashboardStats';
 
-const HostDashboard = () => {
+const HostDashboard = ({ user, userToken, onNavigate }) => {
     const [activeTab, setActiveTab] = useState('overview');
     const [venues, setVenues] = useState([]);
     const [selectedVenue, setSelectedVenue] = useState(null);
@@ -16,15 +16,17 @@ const HostDashboard = () => {
     const fetchVenues = async () => {
         try {
             setLoading(true);
-            const response = await axios.get('/api/host/venues');
-            setVenues(response.data.data.venues);
-            if (response.data.data.venues.length > 0 && !selectedVenue) {
-                setSelectedVenue(response.data.data.venues[0]);
+            const response = await axios.get('/host/venues');
+            
+            if (response.data && response.data.data) {
+                setVenues(response.data.data.venues || []);
+                if (response.data.data.venues?.length > 0) {
+                    setSelectedVenue(response.data.data.venues[0]);
+                }
             }
-            setError(null);
         } catch (error) {
             console.error('Error fetching venues:', error);
-            setError('Failed to load venues');
+            setError('Failed to load venues. Please try again later.');
         } finally {
             setLoading(false);
         }
@@ -34,158 +36,142 @@ const HostDashboard = () => {
         fetchVenues();
     }, []);
 
-    const renderContent = () => {
-        switch (activeTab) {
-            case 'overview':
-                return <DashboardStats venueId={selectedVenue?.id} />;
-            case 'venues':
-                return <VenueManagement />;
-            case 'courts':
-                return <CourtManagement venueId={selectedVenue?.id} />;
-            case 'matchmaking':
-                return <MatchmakingMonitor venueId={selectedVenue?.id} />;
-            default:
-                return null;
-        }
+    const handleVenueSelect = (venue) => {
+        setSelectedVenue(venue);
     };
 
-    const tabs = [
-        {
-            id: 'overview',
-            name: 'Overview',
-            icon: (
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
-                </svg>
-            )
-        },
-        {
-            id: 'venues',
-            name: 'Venues',
-            icon: (
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                </svg>
-            )
-        },
-        {
-            id: 'courts',
-            name: 'Courts',
-            icon: (
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 14v6m-3-3h6M6 10h2a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v2a2 2 0 002 2zm10 0h2a2 2 0 002-2V6a2 2 0 00-2-2h-2a2 2 0 00-2 2v2a2 2 0 002 2zM6 20h2a2 2 0 002-2v-2a2 2 0 00-2-2H6a2 2 0 00-2 2v2a2 2 0 002 2z" />
-                </svg>
-            )
-        },
-        {
-            id: 'matchmaking',
-            name: 'Matchmaking',
-            icon: (
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                </svg>
-            )
-        }
-    ];
+    const handleTabChange = (tab) => {
+        setActiveTab(tab);
+    };
 
-    return (
-        <div className="min-h-screen bg-gray-50">
-            {/* Top Navigation */}
-            <nav className="bg-white shadow">
-                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                    <div className="flex justify-between h-16">
-                        <div className="flex items-center">
-                            <h1 className="text-xl font-bold text-gray-900">Host Dashboard</h1>
-                            {venues.length > 0 && (
-                                <div className="ml-8">
-                                    <select
-                                        value={selectedVenue?.id || ''}
-                                        onChange={(e) => {
-                                            const venue = venues.find(v => v.id === parseInt(e.target.value));
-                                            setSelectedVenue(venue);
-                                        }}
-                                        className="block w-48 pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-primary focus:border-primary sm:text-sm rounded-md"
-                                    >
-                                        {venues.map(venue => (
-                                            <option key={venue.id} value={venue.id}>
-                                                {venue.name}
-                                            </option>
-                                        ))}
-                                    </select>
-                                </div>
-                            )}
-                        </div>
-                        <div className="flex items-center">
-                            <button
-                                onClick={() => setActiveTab('venues')}
-                                className="ml-4 px-4 py-2 text-sm font-medium text-white bg-primary rounded-md hover:bg-primary-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
-                            >
-                                Add New Venue
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </nav>
+    if (loading) {
+        return (
+            <div className="flex justify-center items-center h-64">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+            </div>
+        );
+    }
 
-            {/* Tab Navigation */}
-            <div className="border-b border-gray-200 bg-white">
-                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                    <nav className="-mb-px flex space-x-8" aria-label="Tabs">
-                        {tabs.map(tab => (
-                            <button
-                                key={tab.id}
-                                onClick={() => setActiveTab(tab.id)}
-                                className={`
-                                    group inline-flex items-center py-4 px-1 border-b-2 font-medium text-sm
-                                    ${activeTab === tab.id
-                                        ? 'border-primary text-primary'
-                                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}
-                                `}
-                            >
-                                <span className={`
-                                    ${activeTab === tab.id ? 'text-primary' : 'text-gray-400 group-hover:text-gray-500'}
-                                    -ml-0.5 mr-2 h-5 w-5
-                                `}>
-                                    {tab.icon}
-                                </span>
-                                {tab.name}
-                            </button>
-                        ))}
-                    </nav>
+    if (error) {
+        return (
+            <div className="p-4">
+                <div className="bg-red-50 border border-red-200 rounded-xl p-4">
+                    <p className="text-red-600 text-sm">{error}</p>
                 </div>
             </div>
+        );
+    }
 
-            {/* Main Content */}
-            <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-                {error && (
-                    <div className="mb-8 bg-red-50 text-red-500 p-4 rounded-lg">
-                        {error}
-                    </div>
-                )}
-
-                {loading ? (
-                    <div className="flex justify-center py-12">
-                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-                    </div>
-                ) : venues.length === 0 && activeTab !== 'venues' ? (
-                    <div className="text-center py-12">
-                        <h3 className="text-lg font-medium text-gray-900 mb-2">No Venues Found</h3>
-                        <p className="text-gray-500">
-                            Please add a venue first to manage courts and matchmaking.
-                        </p>
+    return (
+        <div className="p-4 space-y-4">
+            {/* Venue Selection */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+                <h2 className="text-lg font-semibold text-gray-900 mb-4">Venue Anda</h2>
+                {venues.length === 0 ? (
+                    <div className="text-center py-8">
+                        <div className="text-6xl mb-4">🏟️</div>
+                        <h3 className="font-semibold text-gray-900 mb-2">Belum ada venue</h3>
+                        <p className="text-gray-600 text-sm mb-4">Tambahkan venue pertama Anda untuk memulai</p>
                         <button
-                            onClick={() => setActiveTab('venues')}
-                            className="mt-4 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary-dark"
+                            onClick={() => onNavigate('venues')}
+                            className="bg-primary text-white px-4 py-2 rounded-lg font-medium hover:bg-primary-dark transition-colors"
                         >
-                            Add Venue
+                            Tambah Venue
                         </button>
                     </div>
                 ) : (
-                    renderContent()
+                    <div className="grid grid-cols-1 gap-3">
+                        {venues.map((venue) => (
+                            <div
+                                key={venue.id}
+                                onClick={() => handleVenueSelect(venue)}
+                                className={`cursor-pointer p-4 rounded-xl border transition-colors ${
+                                    selectedVenue?.id === venue.id
+                                        ? 'border-primary bg-primary/5'
+                                        : 'border-gray-200 hover:border-primary/50'
+                                }`}
+                            >
+                                <div className="flex items-center justify-between">
+                                    <div className="flex-1">
+                                        <h3 className="font-medium text-gray-900">{venue.name}</h3>
+                                        <p className="text-sm text-gray-600 mt-1">{venue.address}</p>
+                                        <div className="flex items-center mt-2">
+                                            <span className="text-sm text-gray-500">
+                                                🏸 {venue.courts_count || 0} Courts
+                                            </span>
+                                        </div>
+                                    </div>
+                                    {selectedVenue?.id === venue.id && (
+                                        <div className="ml-3">
+                                            <div className="w-6 h-6 bg-primary rounded-full flex items-center justify-center">
+                                                <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
+                                                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                                </svg>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
                 )}
-            </main>
+            </div>
+
+            {/* Dashboard Content */}
+            {selectedVenue && (
+                <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                    {/* Tabs */}
+                    <div className="px-4 pt-4">
+                        <div className="flex bg-gray-100 rounded-xl p-1">
+                            <button
+                                onClick={() => handleTabChange('overview')}
+                                className={`flex-1 py-2 px-4 rounded-lg font-medium transition-colors text-sm ${
+                                    activeTab === 'overview'
+                                        ? 'bg-white text-primary shadow-sm'
+                                        : 'text-gray-600 hover:text-gray-800'
+                                }`}
+                            >
+                                Overview
+                            </button>
+                            <button
+                                onClick={() => handleTabChange('courts')}
+                                className={`flex-1 py-2 px-4 rounded-lg font-medium transition-colors text-sm ${
+                                    activeTab === 'courts'
+                                        ? 'bg-white text-primary shadow-sm'
+                                        : 'text-gray-600 hover:text-gray-800'
+                                }`}
+                            >
+                                Courts
+                            </button>
+                            <button
+                                onClick={() => handleTabChange('matchmaking')}
+                                className={`flex-1 py-2 px-4 rounded-lg font-medium transition-colors text-sm ${
+                                    activeTab === 'matchmaking'
+                                        ? 'bg-white text-primary shadow-sm'
+                                        : 'text-gray-600 hover:text-gray-800'
+                                }`}
+                            >
+                                Matchmaking
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Content */}
+                    <div className="p-6">
+                        {activeTab === 'overview' && (
+                            <DashboardStats venue={selectedVenue} />
+                        )}
+                        {activeTab === 'courts' && (
+                            <CourtManagement venue={selectedVenue} />
+                        )}
+                        {activeTab === 'matchmaking' && (
+                            <MatchmakingMonitor venue={selectedVenue} />
+                        )}
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
 
-export default HostDashboard; 
+export default HostDashboard;

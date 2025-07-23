@@ -12,7 +12,7 @@ const CommunityCreation = () => {
   useEffect(() => {
     const fetchSports = async () => {
       try {
-        const response = await axios.get('/api/sports');
+        const response = await axios.get('/sports');
         setSports(response.data.data.sports);
       } catch (err) {
         console.error('Error fetching sports:', err);
@@ -27,7 +27,7 @@ const CommunityCreation = () => {
     setError(null);
 
     try {
-      const response = await axios.post('/api/communities', values);
+      const response = await axios.post('/communities', values);
       
       if (response.data.status === 'success') {
         navigate('/host/communities');
@@ -54,4 +54,4 @@ const CommunityCreation = () => {
   );
 };
 
-export default CommunityCreation; 
+export default CommunityCreation;

@@ -172,7 +172,7 @@ const DiscoveryPage = ({ userToken, onNavigate }) => {
         setIsLoading(true);
         try {
             const [eventsResponse, communitiesResponse] = await Promise.all([
-                axios.get('/api/events/nearby', {
+                axios.get('/events/nearby', {
                     params: {
                         latitude: location.latitude,
                         longitude: location.longitude,
@@ -180,7 +180,7 @@ const DiscoveryPage = ({ userToken, onNavigate }) => {
                         ...filters
                     }
                 }),
-                axios.get('/api/communities/nearby', {
+                axios.get('/communities/nearby', {
                     params: {
                         latitude: location.latitude,
                         longitude: location.longitude,
@@ -582,4 +582,4 @@ const DiscoveryPage = ({ userToken, onNavigate }) => {
     );
 };
 
-export default DiscoveryPage; 
+export default DiscoveryPage;

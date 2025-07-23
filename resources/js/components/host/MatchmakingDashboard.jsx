@@ -3,8 +3,10 @@ import { toast } from 'react-hot-toast';
 import axios from 'axios';
 import { HiRefresh, HiUserAdd, HiUsers, HiClock, HiLocationMarker } from 'react-icons/hi';
 import GuestPlayerManagement from './GuestPlayerManagement';
+import { useEvent } from '../../contexts/EventContext';
 
-const MatchmakingDashboard = ({ eventId }) => {
+const MatchmakingDashboard = () => {
+    const { currentEvent, loading: eventLoading } = useEvent();
     const [matches, setMatches] = useState([]);
     const [waitingPlayers, setWaitingPlayers] = useState([]);
     const [selectedMatch, setSelectedMatch] = useState(null);
@@ -16,12 +18,13 @@ const MatchmakingDashboard = ({ eventId }) => {
     const [error, setError] = useState(null);
 
     const fetchMatchmakingStatus = async (forceRefresh = false) => {
+        if (!currentEvent?.id) return;
         if (loading && !forceRefresh) return;
         
         setLoading(!forceRefresh);
         setRefreshing(forceRefresh);
         try {
-            const response = await axios.get(`/api/matchmaking/${eventId}/status`);
+            const response = await axios.get(`/api/matchmaking/${currentEvent.id}/status`);
             setMatches(response.data.matches || []);
             setWaitingPlayers(response.data.waiting_players || []);
             setError(null);
@@ -36,14 +39,20 @@ const MatchmakingDashboard = ({ eventId }) => {
     };
 
     useEffect(() => {
-        fetchMatchmakingStatus();
-        const interval = setInterval(() => fetchMatchmakingStatus(true), 30000);
-        return () => clearInterval(interval);
-    }, [fetchMatchmakingStatus]);
+        if (currentEvent?.id) {
+            fetchMatchmakingStatus();
+            const interval = setInterval(() => fetchMatchmakingStatus(true), 30000);
+            return () => clearInterval(interval);
+        }
+    }, [currentEvent?.id]);
 
     const handleCreateMatches = async () => {
+        if (!currentEvent?.id) {
+            toast.error('No event selected');
+            return;
+        }
         try {
-            const response = await axios.post(`/api/matchmaking/${eventId}/fair-matches`);
+            const response = await axios.post(`/api/matchmaking/${currentEvent.id}/fair-matches`);
             if (response.data.success) {
                 toast.success('New matches created successfully');
                 fetchMatchmakingStatus(true);
@@ -54,8 +63,9 @@ const MatchmakingDashboard = ({ eventId }) => {
     };
 
     const handleOverrideMatch = async (matchId, playerId, replacementId) => {
+        if (!currentEvent?.id) return;
         try {
-            await axios.post(`/api/matchmaking/${eventId}/override-player`, {
+            await axios.post(`/api/matchmaking/${currentEvent.id}/override-player`, {
                 match_id: matchId,
                 player_to_replace: playerId,
                 replacement_player: replacementId
@@ -71,8 +81,9 @@ const MatchmakingDashboard = ({ eventId }) => {
     };
 
     const handleAssignCourt = async (matchId, courtNumber) => {
+        if (!currentEvent?.id) return;
         try {
-            await axios.post(`/api/matchmaking/${eventId}/assign-court`, {
+            await axios.post(`/api/matchmaking/${currentEvent.id}/assign-court`, {
                 match_id: matchId,
                 court_number: courtNumber
             });
@@ -88,143 +99,164 @@ const MatchmakingDashboard = ({ eventId }) => {
         const isGuest = player.is_guest;
 
         return (
-            <div className="flex flex-col">
-                <div className="flex items-center space-x-2">
-                    <img
-                        src={player.profile_picture || '/default-avatar.png'}
-                        alt={player.name}
-                        className="w-8 h-8 rounded-full"
-                    />
-                    <div>
+            <div className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg">
+                <img
+                    src={player.profile_picture || '/default-avatar.png'}
+                    alt={player.name}
+                    className="w-10 h-10 rounded-full object-cover"
+                />
+                <div className="flex-1">
+                    <div className="flex items-center space-x-2">
                         <span className="font-medium text-gray-900">{player.name}</span>
                         {isGuest && (
-                            <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
+                            <span className="px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700">
                                 Guest
                             </span>
                         )}
-                        <div className="flex items-center space-x-2 text-sm text-gray-500">
-                            <span>MMR: {player.mmr}</span>
-                            {!isGuest && (
-                                <span>• Win Rate: {player.win_rate ? `${(player.win_rate * 100).toFixed(1)}%` : 'N/A'}</span>
-                            )}
-                        </div>
+                    </div>
+                    <div className="flex items-center space-x-2 text-sm text-gray-600">
+                        <span>MMR: {player.mmr}</span>
+                        {!isGuest && (
+                            <span>• Win Rate: {player.win_rate ? `${(player.win_rate * 100).toFixed(1)}%` : 'N/A'}</span>
+                        )}
                     </div>
                 </div>
             </div>
         );
     };
 
-    if (loading) {
+    if (eventLoading || loading) {
         return (
             <div className="flex items-center justify-center min-h-[400px]">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+            </div>
+        );
+    }
+
+    if (!currentEvent) {
+        return (
+            <div className="p-4">
+                <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+                    <div className="text-center py-8">
+                        <div className="text-6xl mb-4">📅</div>
+                        <h3 className="font-semibold text-gray-900 mb-2">Tidak ada event dipilih</h3>
+                        <p className="text-gray-600 text-sm">Pilih event untuk mengelola matchmaking</p>
+                    </div>
+                </div>
             </div>
         );
     }
 
     return (
-        <div className="space-y-6">
+        <div className="p-4 space-y-4">
             {/* Header Actions */}
-            <div className="flex flex-wrap items-center justify-between gap-4">
-                <div className="flex items-center space-x-4">
-                    <h1 className="text-2xl font-bold text-gray-900">Matchmaking Dashboard</h1>
-                    <button
-                        onClick={() => fetchMatchmakingStatus(true)}
-                        className={`p-2 text-gray-500 hover:text-gray-700 rounded-full hover:bg-gray-100 ${
-                            refreshing ? 'animate-spin' : ''
-                        }`}
-                    >
-                        <HiRefresh className="w-5 h-5" />
-                    </button>
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+                <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center space-x-3">
+                        <h1 className="text-lg font-semibold text-gray-900">Matchmaking Dashboard</h1>
+                        <button
+                            onClick={() => fetchMatchmakingStatus(true)}
+                            className={`p-2 text-gray-500 hover:text-gray-700 rounded-lg hover:bg-gray-100 ${
+                                refreshing ? 'animate-spin' : ''
+                            }`}
+                        >
+                            <HiRefresh className="w-5 h-5" />
+                        </button>
+                    </div>
                 </div>
-                <div className="flex space-x-3">
+                <div className="flex flex-col sm:flex-row gap-3">
                     <button
                         onClick={() => setShowGuestManagement(!showGuestManagement)}
-                        className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
+                        className="flex items-center justify-center px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
                     >
                         <HiUserAdd className="w-5 h-5 mr-2" />
-                        {showGuestManagement ? 'Hide Guest Management' : 'Manage Guests'}
+                        {showGuestManagement ? 'Sembunyikan Guest' : 'Kelola Guest'}
                     </button>
                     <button
                         onClick={handleCreateMatches}
-                        className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700"
+                        className="flex items-center justify-center px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary-dark transition-colors text-sm font-medium"
                     >
                         <HiUsers className="w-5 h-5 mr-2" />
-                        Create New Matches
+                        Buat Match Baru
                     </button>
                 </div>
             </div>
 
             {/* Guest Player Management */}
             {showGuestManagement && (
-                <div className="bg-white shadow sm:rounded-lg overflow-hidden">
-                    <div className="px-4 py-5 sm:p-6">
-                        <GuestPlayerManagement 
-                            eventId={eventId} 
-                            onGuestAdded={() => fetchMatchmakingStatus(true)} 
-                        />
-                    </div>
+                <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4">Manajemen Guest Player</h3>
+                    <GuestPlayerManagement 
+                        eventId={currentEvent.id} 
+                        onGuestAdded={() => fetchMatchmakingStatus(true)} 
+                    />
                 </div>
             )}
 
             {/* Waiting Players */}
-            <div className="bg-white shadow sm:rounded-lg overflow-hidden">
-                <div className="px-4 py-5 sm:p-6">
-                    <div className="flex items-center justify-between mb-4">
-                        <h2 className="text-lg font-medium text-gray-900">
-                            Waiting Players ({waitingPlayers.length})
-                        </h2>
-                        <span className="text-sm text-gray-500">
-                            <HiClock className="inline w-4 h-4 mr-1" />
-                            Auto-refreshes every 30s
-                        </span>
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {waitingPlayers.map((player) => (
-                            <div key={player.id} className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-                                {renderPlayerStats(player)}
-                                <div className="mt-2 text-sm text-gray-500">
-                                    <HiClock className="inline w-4 h-4 mr-1" />
-                                    Waiting: {player.waiting_minutes} mins
-                                </div>
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+                <div className="flex items-center justify-between mb-4">
+                    <h2 className="text-lg font-semibold text-gray-900">
+                        Player Menunggu ({waitingPlayers.length})
+                    </h2>
+                    <span className="text-sm text-gray-500 flex items-center">
+                        <HiClock className="w-4 h-4 mr-1" />
+                        Auto-refresh 30s
+                    </span>
+                </div>
+                <div className="space-y-3">
+                    {waitingPlayers.map((player) => (
+                        <div key={player.id} className="bg-gray-50 rounded-xl p-4">
+                            {renderPlayerStats(player)}
+                            <div className="mt-2 flex items-center text-sm text-gray-600">
+                                <HiClock className="w-4 h-4 mr-1" />
+                                <span>Menunggu: {player.waiting_minutes} menit</span>
                             </div>
-                        ))}
-                        {waitingPlayers.length === 0 && (
-                            <div className="col-span-full text-center py-8 text-gray-500">
-                                No players waiting for matches
-                            </div>
-                        )}
-                    </div>
+                        </div>
+                    ))}
+                    {waitingPlayers.length === 0 && (
+                        <div className="text-center py-8 text-gray-500">
+                            <div className="text-6xl mb-4">⏳</div>
+                            <p>Tidak ada player yang menunggu</p>
+                        </div>
+                    )}
                 </div>
             </div>
 
             {/* Current Matches */}
-            <div className="bg-white shadow sm:rounded-lg overflow-hidden">
-                <div className="px-4 py-5 sm:p-6">
-                    <h2 className="text-lg font-medium text-gray-900 mb-4">
-                        Current Matches ({matches.length})
-                    </h2>
-                    <div className="space-y-4">
-                        {matches.map((match) => (
-                            <div key={match.id} className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                                    <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
-                                        {renderPlayerStats(match.player1)}
-                                        <div className="text-gray-500 font-medium px-4">vs</div>
-                                        {renderPlayerStats(match.player2)}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+                <h2 className="text-lg font-semibold text-gray-900 mb-4">
+                    Match Aktif ({matches.length})
+                </h2>
+                <div className="space-y-4">
+                    {matches.map((match) => (
+                        <div key={match.id} className="bg-gray-50 rounded-xl p-4">
+                            <div className="flex flex-col space-y-4">
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center space-x-4">
+                                        <div className="flex-1">
+                                            {renderPlayerStats(match.player1)}
+                                        </div>
+                                        <div className="text-gray-500 font-medium px-4">VS</div>
+                                        <div className="flex-1">
+                                            {renderPlayerStats(match.player2)}
+                                        </div>
                                     </div>
+                                </div>
+                                
+                                <div className="flex items-center justify-between">
                                     <div className="flex items-center space-x-2">
                                         {match.court_number ? (
-                                            <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
+                                            <span className="px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-700 flex items-center">
                                                 <HiLocationMarker className="w-4 h-4 mr-1" />
                                                 Court {match.court_number}
                                             </span>
                                         ) : (
                                             <select
                                                 onChange={(e) => handleAssignCourt(match.id, e.target.value)}
-                                                className="rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                                                className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-primary focus:border-transparent"
                                             >
-                                                <option value="">Assign Court</option>
+                                                <option value="">Pilih Court</option>
                                                 {[...Array(10)].map((_, i) => (
                                                     <option key={i + 1} value={i + 1}>
                                                         Court {i + 1}
@@ -232,26 +264,26 @@ const MatchmakingDashboard = ({ eventId }) => {
                                                 ))}
                                             </select>
                                         )}
-                                        <button
-                                            onClick={() => {
-                                                setSelectedMatch(match);
-                                                setIsOverriding(true);
-                                            }}
-                                            className="inline-flex items-center px-3 py-1 border border-transparent text-sm font-medium rounded-md text-blue-700 bg-blue-100 hover:bg-blue-200"
-                                        >
-                                            Override
-                                        </button>
                                     </div>
+                                    <button
+                                        onClick={() => {
+                                            setSelectedMatch(match);
+                                            setIsOverriding(true);
+                                        }}
+                                        className="px-3 py-1 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors text-sm font-medium"
+                                    >
+                                        Override
+                                    </button>
                                 </div>
 
                                 {/* Override Player UI */}
                                 {isOverriding && selectedMatch?.id === match.id && (
-                                    <div className="mt-4 p-4 border rounded-lg bg-white">
+                                    <div className="mt-4 p-4 border border-gray-200 rounded-xl bg-white">
                                         <h4 className="font-medium mb-4">Override Player</h4>
                                         <div className="space-y-4">
                                             <div>
                                                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                                                    Select Player to Replace
+                                                    Pilih Player untuk Diganti
                                                 </label>
                                                 <select
                                                     value={overridePlayer?.id || ''}
@@ -261,9 +293,9 @@ const MatchmakingDashboard = ({ eventId }) => {
                                                             : match.player2;
                                                         setOverridePlayer(player);
                                                     }}
-                                                    className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                                                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-primary focus:border-transparent"
                                                 >
-                                                    <option value="">Select player</option>
+                                                    <option value="">Pilih player</option>
                                                     <option value={match.player1.id}>{match.player1.name}</option>
                                                     <option value={match.player2.id}>{match.player2.name}</option>
                                                 </select>
@@ -272,7 +304,7 @@ const MatchmakingDashboard = ({ eventId }) => {
                                             {overridePlayer && (
                                                 <div>
                                                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                                                        Select Replacement
+                                                        Pilih Pengganti
                                                     </label>
                                                     <select
                                                         onChange={(e) => handleOverrideMatch(
@@ -280,9 +312,9 @@ const MatchmakingDashboard = ({ eventId }) => {
                                                             overridePlayer.id,
                                                             e.target.value
                                                         )}
-                                                        className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                                                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-primary focus:border-transparent"
                                                     >
-                                                        <option value="">Select replacement</option>
+                                                        <option value="">Pilih pengganti</option>
                                                         {waitingPlayers.map((player) => (
                                                             <option key={player.id} value={player.id}>
                                                                 {player.name} (MMR: {player.mmr})
@@ -299,22 +331,23 @@ const MatchmakingDashboard = ({ eventId }) => {
                                                         setSelectedMatch(null);
                                                         setOverridePlayer(null);
                                                     }}
-                                                    className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
+                                                    className="px-4 py-2 border border-gray-300 text-sm font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50"
                                                 >
-                                                    Cancel Override
+                                                    Batal Override
                                                 </button>
                                             </div>
                                         </div>
                                     </div>
                                 )}
                             </div>
-                        ))}
-                        {matches.length === 0 && (
-                            <div className="text-center py-8 text-gray-500">
-                                No active matches
-                            </div>
-                        )}
-                    </div>
+                        </div>
+                    ))}
+                    {matches.length === 0 && (
+                        <div className="text-center py-8 text-gray-500">
+                            <div className="text-6xl mb-4">🎾</div>
+                            <p>Tidak ada match aktif</p>
+                        </div>
+                    )}
                 </div>
             </div>
         </div>

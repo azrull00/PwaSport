@@ -1,12 +1,23 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 
-const LoginPage = ({ onNavigate, userType, onLoginSuccess }) => {
+const LoginPage = ({ onLoginSuccess }) => {
+    const navigate = useNavigate();
+    const [userType, setUserType] = useState('player');
     const [formData, setFormData] = useState({
         login: '',
         password: ''
     });
     const [errors, setErrors] = useState({});
     const [isLoading, setIsLoading] = useState(false);
+
+    // Get user type from localStorage if available
+    useEffect(() => {
+        const selectedUserType = localStorage.getItem('selectedUserType');
+        if (selectedUserType) {
+            setUserType(selectedUserType);
+        }
+    }, []);
 
     const handleInputChange = (e) => {
         const { name, value } = e.target;
@@ -57,21 +68,43 @@ const LoginPage = ({ onNavigate, userType, onLoginSuccess }) => {
                 headers: {
                     'Content-Type': 'application/json',
                     'Accept': 'application/json',
-                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
                 },
-                body: JSON.stringify(formData)
+                body: JSON.stringify({
+                    ...formData,
+                    user_type: userType // Send user type with login request
+                })
             });
 
             const data = await response.json();
 
-            if (data.status === 'success') {
-                // Call the success callback to handle authentication
-                if (data.data.user.is_host) {
-                    onNavigate('hostDashboard');
-                } else {
-                    onNavigate('playerDashboard');
+            if (data.status === 'success' && data.data?.user) {
+                // Verify user type matches
+                const isHost = data.data.user.is_host;
+                if ((userType === 'host' && !isHost) || (userType === 'player' && isHost)) {
+                    setErrors({
+                        form: userType === 'host' 
+                            ? 'Akun ini bukan akun Host. Silakan login sebagai Player.' 
+                            : 'Akun ini adalah akun Host. Silakan login sebagai Host.'
+                    });
+                    return;
                 }
-                onLoginSuccess(data.data.token, data.data.user, userType);
+
+                // Call the success callback to handle authentication
+                const actualUserType = isHost ? 'host' : 'player';
+                
+                // Store auth data in localStorage
+                localStorage.setItem('authToken', data.data.token);
+                localStorage.setItem('userData', JSON.stringify(data.data.user));
+                localStorage.setItem('userType', actualUserType);
+                
+                // Check if onLoginSuccess is provided before calling it
+                if (typeof onLoginSuccess === 'function') {
+                    onLoginSuccess(actualUserType, data.data.token, data.data.user);
+                }
+                
+                // Navigate to the appropriate dashboard
+                navigate(actualUserType === 'host' ? '/host' : '/player');
             } else {
                 // Handle validation errors
                 if (data.errors) {
@@ -111,13 +144,13 @@ const LoginPage = ({ onNavigate, userType, onLoginSuccess }) => {
             {/* Header */}
             <div className="flex items-center justify-between p-6">
                 <button 
-                    onClick={() => onNavigate('onboarding')}
+                    onClick={() => navigate('/onboarding')}
                     className="text-gray-600 hover:text-gray-800 transition-colors"
                 >
                     <span className="text-2xl">←</span>
                 </button>
                 <h1 className="text-lg font-semibold text-gray-900">Masuk</h1>
-                <div className="w-8"></div> {/* Spacer for centering */}
+                <div className="w-8"></div>
             </div>
 
             {/* Content */}
@@ -136,33 +169,15 @@ const LoginPage = ({ onNavigate, userType, onLoginSuccess }) => {
                         </div>
                     </div>
 
-                    {/* Welcome Message */}
-                    <div className="text-center mb-8">
-                        <div className="w-20 h-20 bg-primary rounded-2xl flex items-center justify-center mx-auto mb-4">
-                            <span className="text-3xl font-bold text-white">SA</span>
+                    {/* Form Error */}
+                    {errors.form && (
+                        <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-6">
+                            <p className="text-red-600 text-sm">{errors.form}</p>
                         </div>
-                        <h2 className="text-2xl font-bold text-gray-900 mb-2">Selamat Datang Kembali!</h2>
-                        <p className="text-gray-600">
-                            Masuk untuk melanjutkan sebagai {userTypeInfo.title}
-                        </p>
-                    </div>
+                    )}
 
                     {/* Login Form */}
                     <form onSubmit={handleSubmit} className="space-y-6">
-                        {/* Form Error */}
-                        {errors.form && (
-                            <div className="bg-red-50 border border-red-200 rounded-xl p-4">
-                                <p className="text-red-600 text-sm">{errors.form}</p>
-                            </div>
-                        )}
-
-                        {/* Display server validation errors */}
-                        {errors.login && (
-                            <div className="bg-red-50 border border-red-200 rounded-xl p-4">
-                                <p className="text-red-600 text-sm">{errors.login}</p>
-                            </div>
-                        )}
-
                         {/* Email/Phone Field */}
                         <div>
                             <label htmlFor="login" className="block text-sm font-medium text-gray-700 mb-2">
@@ -179,7 +194,7 @@ const LoginPage = ({ onNavigate, userType, onLoginSuccess }) => {
                                 }`}
                                 placeholder="Masukkan email atau nomor HP"
                             />
-                            {errors.login && !errors.form && (
+                            {errors.login && (
                                 <p className="text-red-500 text-sm mt-1">{errors.login}</p>
                             )}
                         </div>
@@ -205,16 +220,6 @@ const LoginPage = ({ onNavigate, userType, onLoginSuccess }) => {
                             )}
                         </div>
 
-                        {/* Forgot Password */}
-                        <div className="text-right">
-                            <button
-                                type="button"
-                                className="text-primary hover:text-primary-dark text-sm font-medium transition-colors"
-                            >
-                                Lupa Password?
-                            </button>
-                        </div>
-
                         {/* Submit Button */}
                         <button
                             type="submit"
@@ -229,20 +234,13 @@ const LoginPage = ({ onNavigate, userType, onLoginSuccess }) => {
                         </button>
                     </form>
 
-                    {/* Divider */}
-                    <div className="flex items-center my-8">
-                        <div className="flex-1 border-t border-gray-300"></div>
-                        <span className="px-4 text-sm text-gray-500">atau</span>
-                        <div className="flex-1 border-t border-gray-300"></div>
-                    </div>
-
                     {/* Register Link */}
-                    <div className="text-center">
+                    <div className="text-center mt-8">
                         <p className="text-gray-600 mb-4">
                             Belum punya akun {userTypeInfo.title}?
                         </p>
                         <button
-                            onClick={() => onNavigate('register', userType)}
+                            onClick={() => navigate('/register')}
                             className="w-full bg-white border-2 border-primary text-primary py-3 rounded-xl font-semibold hover:bg-primary hover:text-white transition-all duration-300 shadow-mobile"
                         >
                             Daftar sebagai {userTypeInfo.title}
@@ -251,7 +249,7 @@ const LoginPage = ({ onNavigate, userType, onLoginSuccess }) => {
                         {/* Change User Type */}
                         <div className="mt-4">
                             <button
-                                onClick={() => onNavigate('onboarding')}
+                                onClick={() => navigate('/onboarding')}
                                 className="text-gray-500 text-sm hover:text-gray-700 transition-colors"
                             >
                                 Ingin masuk sebagai {userType === 'player' ? 'Host' : 'Player'}?
@@ -260,17 +258,8 @@ const LoginPage = ({ onNavigate, userType, onLoginSuccess }) => {
                     </div>
                 </div>
             </div>
-
-            {/* Footer */}
-            <div className="p-6 text-center">
-                <p className="text-xs text-gray-500">
-                    Dengan masuk, Anda menyetujui{' '}
-                    <span className="text-primary">Syarat & Ketentuan</span> dan{' '}
-                    <span className="text-primary">Kebijakan Privasi</span> kami
-                </p>
-            </div>
         </div>
     );
 };
 
-export default LoginPage; 
+export default LoginPage;

@@ -22,7 +22,7 @@ const MyEventsPage = ({ userToken, onNavigate }) => {
         setError('');
         
         try {
-            const response = await fetch('/api/users/my-events?per_page=50', {
+            const response = await fetch('/users/my-events?per_page=50', {
                 headers: {
                     'Authorization': `Bearer ${userToken}`,
                     'Accept': 'application/json'

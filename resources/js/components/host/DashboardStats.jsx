@@ -58,7 +58,7 @@ const DashboardStats = ({ venueId }) => {
 
       try {
         setLoading(true);
-        const response = await axios.get(`/api/host/venues/${venueId}/stats`);
+        const response = await axios.get(`/host/venues/${venueId}/stats`);
         setStats(response.data.data);
         setError(null);
       } catch (err) {
@@ -218,4 +218,4 @@ const DashboardStats = ({ venueId }) => {
   );
 };
 
-export default DashboardStats; 
+export default DashboardStats;

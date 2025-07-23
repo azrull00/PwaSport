@@ -20,9 +20,9 @@ const MatchmakingStatusPage = ({ userToken, onNavigate, onBack, eventId = null }
             setLoading(true);
             
             // If eventId is provided, fetch specific event matchmaking status
-            let url = '/api/users/my-matchmaking-status';
+            let url = '/users/my-matchmaking-status';
             if (eventId) {
-                url = `/api/matchmaking/${eventId}/event-matchmaking-status`;
+                url = `/matchmaking/${eventId}/event-matchmaking-status`;
             }
             
             const response = await fetch(url, {

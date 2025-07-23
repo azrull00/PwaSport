@@ -42,6 +42,15 @@ class User extends Authenticatable
     ];
 
     /**
+     * The attributes that should be appended to the model.
+     *
+     * @var array<int, string>
+     */
+    protected $appends = [
+        'is_host'
+    ];
+
+    /**
      * Get the attributes that should be cast.
      *
      * @return array<string, string>
@@ -52,7 +61,18 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'is_active' => 'boolean',
+            'is_host' => 'boolean',
         ];
+    }
+
+    /**
+     * Get the is_host attribute.
+     *
+     * @return bool
+     */
+    public function getIsHostAttribute(): bool
+    {
+        return $this->hasRole('host');
     }
 
     // Relationships

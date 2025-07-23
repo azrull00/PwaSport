@@ -15,7 +15,7 @@ const DistanceDisplay = ({
 
   const calculateDistance = async (start, end) => {
     try {
-      const response = await axios.post('/api/location/calculate-distance', {
+      const response = await axios.post('/location/calculate-distance', {
         start_latitude: start.lat,
         start_longitude: start.lng,
         end_latitude: end.lat,
@@ -95,4 +95,4 @@ DistanceDisplay.propTypes = {
   updateInterval: PropTypes.number
 };
 
-export default DistanceDisplay; 
+export default DistanceDisplay;

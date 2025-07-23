@@ -50,19 +50,25 @@ class AuthController extends Controller
             ]);
 
             // Assign default role - use web guard as default in Laravel
-            $user->assignRole(\Spatie\Permission\Models\Role::where('name', $request->user_type)->where('guard_name', 'web')->first());
+            $role = \Spatie\Permission\Models\Role::where('name', $request->user_type)
+                ->where('guard_name', 'web')
+                ->first();
+            
+            $user->assignRole($role);
 
             // Create token
             $token = $user->createToken('auth_token')->plainTextToken;
 
-            // Load profile relationship
-            $user->load('profile');
+            // Load profile relationship and check role
+            $user->load('profile', 'roles');
+            $userData = $user->toArray();
+            $userData['is_host'] = $user->hasRole('host');
 
             return response()->json([
                 'status' => 'success',
                 'message' => 'Registrasi berhasil!',
                 'data' => [
-                    'user' => $user,
+                    'user' => $userData,
                     'token' => $token,
                     'token_type' => 'Bearer'
                 ]
@@ -98,14 +104,16 @@ class AuthController extends Controller
             // Create token
             $token = $user->createToken('auth_token')->plainTextToken;
 
-            // Load relationships
-            $user->load('profile', 'sportRatings');
+            // Load relationships and check role
+            $user->load('profile', 'sportRatings', 'roles');
+            $userData = $user->toArray();
+            $userData['is_host'] = $user->hasRole('host');
 
             return response()->json([
                 'status' => 'success',
                 'message' => 'Login berhasil!',
                 'data' => [
-                    'user' => $user,
+                    'user' => $userData,
                     'token' => $token,
                     'token_type' => 'Bearer'
                 ]

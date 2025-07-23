@@ -42,7 +42,7 @@ const MatchmakingMonitor = ({ venueId }) => {
   const fetchMatchmakingData = useCallback(async (isRetry = false) => {
     try {
       setLoading(isRetry ? false : true);
-      const response = await axios.get(`/api/host/venues/${venueId}/matchmaking-status`);
+      const response = await axios.get(`/host/venues/${venueId}/matchmaking-status`);
       setMatchmakingData(response.data.data);
       setLastUpdated(new Date());
       setError(null);
@@ -108,7 +108,8 @@ const MatchmakingMonitor = ({ venueId }) => {
     }
 
     try {
-      await axios.post(`/api/host/matchmaking/override`, {
+      // Use the host override endpoint from legacy routes
+      await axios.post(`/host/matchmaking/override`, {
         venue_id: venueId,
         ...overrideData
       });
@@ -134,7 +135,8 @@ const MatchmakingMonitor = ({ venueId }) => {
     }
 
     try {
-      await axios.post(`/api/host/matchmaking/${matchId}/cancel`);
+      // Use delete endpoint to remove match from history
+      await axios.delete(`/api/matches/${matchId}`);
       toast.success('Match cancelled successfully');
       fetchMatchmakingData();
     } catch (error) {

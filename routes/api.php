@@ -149,6 +149,9 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/{community}/members/{user}/points', [CommunityController::class, 'addMemberPoints']);
         Route::get('/{community}/rankings', [CommunityController::class, 'getMemberRankings']);
         Route::post('/{community}/rankings/refresh', [CommunityController::class, 'refreshRankings']);
+        
+        // Community players (for host analytics)
+        Route::get('/{community}/players', [CommunityController::class, 'getCommunityPlayers']);
     });
 
     // Notifications routes
@@ -340,36 +343,36 @@ Route::middleware('auth:sanctum')->group(function () {
     // Host Management Routes
     Route::middleware(['auth:sanctum'])->group(function () {
         // Host Dashboard
-        Route::get('/host/dashboard/stats', 'Api\HostController@getDashboardStats');
-        Route::get('/host/analytics', 'Api\HostController@getHostAnalytics');
+        Route::get('/host/dashboard/stats', [HostController::class, 'getDashboardStats']);
+        Route::get('/host/analytics', [HostController::class, 'getHostAnalytics']);
         
         // Venue Management
-        Route::get('/host/venues', 'Api\HostController@getVenues');
-        Route::post('/host/venues', 'Api\HostController@createVenue');
-        Route::put('/host/venues/{venueId}', 'Api\HostController@updateVenue');
-        Route::delete('/host/venues/{venueId}', 'Api\HostController@deleteVenue');
-        Route::get('/host/venues/{venueId}/stats', 'Api\HostController@getVenueStats');
-        Route::get('/host/venues/{venueId}/matchmaking-status', 'Api\HostController@getVenueMatchmakingStatus');
+        Route::get('/host/venues', [HostController::class, 'getVenues']);
+        Route::post('/host/venues', [HostController::class, 'createVenue']);
+        Route::put('/host/venues/{venueId}', [HostController::class, 'updateVenue']);
+        Route::delete('/host/venues/{venueId}', [HostController::class, 'deleteVenue']);
+        Route::get('/host/venues/{venueId}/stats', [HostController::class, 'getVenueStats']);
+        Route::get('/host/venues/{venueId}/matchmaking-status', [HostController::class, 'getVenueMatchmakingStatus']);
         
         // Court Management
-        Route::get('/host/venues/{venue}/courts', 'Api\HostController@getCourts');
-        Route::put('/host/courts/{courtId}/status', 'Api\HostController@updateCourtStatus');
-        Route::post('/host/courts/{courtId}/assign-match', 'Api\HostController@assignMatch');
+        Route::get('/host/venues/{venue}/courts', [HostController::class, 'getCourts']);
+        Route::put('/host/courts/{courtId}/status', [HostController::class, 'updateCourtStatus']);
+        Route::post('/host/courts/{courtId}/assign-match', [HostController::class, 'assignMatch']);
         
         // Community Management
-        Route::get('/host/communities/{communityId}/stats', 'Api\HostController@getCommunityStats');
-        Route::put('/host/communities/{communityId}/settings', 'Api\HostController@updateCommunitySettings');
-        Route::post('/host/communities/{communityId}/members/{memberId}/manage', 'Api\HostController@manageMemberRequest');
+        Route::get('/host/communities/{communityId}/stats', [HostController::class, 'getCommunityStats']);
+        Route::put('/host/communities/{communityId}/settings', [HostController::class, 'updateCommunitySettings']);
+        Route::post('/host/communities/{communityId}/members/{memberId}/manage', [HostController::class, 'manageMemberRequest']);
         
         // Guest Player Management
-        Route::get('/host/events/{event}/guest-players', 'Api\HostController@listGuestPlayers');
-        Route::post('/host/events/{event}/guest-players', 'Api\HostController@addGuestPlayer');
-        Route::put('/host/events/{event}/guest-players/{guestPlayer}', 'Api\HostController@updateGuestPlayer');
-        Route::delete('/host/events/{event}/guest-players/{guestPlayer}', 'Api\HostController@removeGuestPlayer');
+        Route::get('/host/events/{event}/guest-players', [HostController::class, 'listGuestPlayers']);
+        Route::post('/host/events/{event}/guest-players', [HostController::class, 'addGuestPlayer']);
+        Route::put('/host/events/{event}/guest-players/{guestPlayer}', [HostController::class, 'updateGuestPlayer']);
+        Route::delete('/host/events/{event}/guest-players/{guestPlayer}', [HostController::class, 'removeGuestPlayer']);
 
         // QR Code Check-in
-        Route::post('/host/events/{event}/check-in/qr', 'Api\HostController@processQRCheckIn');
-        Route::post('/host/events/{event}/generate-qr', 'Api\HostController@generateCheckInQR');
+        Route::post('/host/events/{event}/check-in/qr', [HostController::class, 'processQRCheckIn']);
+        Route::post('/host/events/{event}/generate-qr', [HostController::class, 'generateCheckInQR']);
     });
 
     // Matchmaking Management (New standardized routes using Event model dependency injection)

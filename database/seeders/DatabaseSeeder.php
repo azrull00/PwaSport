@@ -17,6 +17,7 @@ class DatabaseSeeder extends Seeder
             UserSeeder::class,
             CommunitySeeder::class,
             EventSeeder::class,
+            MatchmakingDemoSeeder::class,  // Added comprehensive demo seeder
         ]);
         
         $this->command->info('🎉 All seeders completed successfully!');
@@ -28,5 +29,9 @@ class DatabaseSeeder extends Seeder
         $this->command->info('   - Communities with members and messages');
         $this->command->info('   - Events with participants');
         $this->command->info('   - Venues with facilities');
+        $this->command->info('   - 🎯 Complete matchmaking demo accounts');
+        $this->command->info('   - 🏓 Active matches and match history');
+        $this->command->info('   - 👥 Social connections and messages');
+        $this->command->info('   - 📧 Realistic notifications');
     }
 }
