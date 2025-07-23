@@ -19,11 +19,11 @@ const MainLayout = ({ userType, userToken, userData, onLogout }) => {
     const navigate = useNavigate();
 
     const navigationTabs = [
-        { id: 'home', icon: HiHome, label: 'Beranda', path: '/dashboard' },
-        { id: 'discover', icon: HiSearch, label: 'Jelajah', path: '/dashboard/discover' },
-        { id: 'events', icon: HiCalendar, label: 'Event Saya', path: '/dashboard/events' },
-        { id: 'chat', icon: HiChatAlt2, label: 'Chat & Teman', path: '/dashboard/chat' },
-        { id: 'profile', icon: HiUser, label: 'Profil', path: '/dashboard/profile' }
+        { id: 'home', icon: HiHome, label: 'Beranda', path: '/player' },
+        { id: 'discover', icon: HiSearch, label: 'Jelajah', path: '/player/discover' },
+        { id: 'events', icon: HiCalendar, label: 'Event Saya', path: '/player/events' },
+        { id: 'chat', icon: HiChatAlt2, label: 'Chat & Teman', path: '/player/chat' },
+        { id: 'profile', icon: HiUser, label: 'Profil', path: '/player/profile' }
     ];
 
     // Fetch updated user profile
@@ -55,7 +55,14 @@ const MainLayout = ({ userType, userToken, userData, onLogout }) => {
     }, [userToken]);
 
     const handleNavigation = (path, params = {}) => {
-        navigate(path, { state: params });
+        // Handle special navigation cases
+        if (path === 'matchmakingStatus') {
+            navigate('/player/matchmakingStatus', { state: params });
+        } else if (path.startsWith('/')) {
+            navigate(path, { state: params });
+        } else {
+            navigate(`/player/${path}`, { state: params });
+        }
     };
 
     const handleBack = () => {
@@ -79,14 +86,14 @@ const MainLayout = ({ userType, userToken, userData, onLogout }) => {
                             <div className="flex justify-between items-center p-4 bg-white shadow">
                                 <button
                                     className={`flex-1 py-2 px-4 text-center ${location.state?.showFriends ? 'text-gray-600' : 'text-primary border-b-2 border-primary'}`}
-                                    onClick={() => navigate('/dashboard/chat', { state: { showFriends: false } })}
+                                    onClick={() => navigate('/player/chat', { state: { showFriends: false } })}
                                 >
                                     <HiChatAlt2 className="w-6 h-6 mx-auto" />
                                     <span className="text-sm">Chat</span>
                                 </button>
                                 <button
                                     className={`flex-1 py-2 px-4 text-center ${location.state?.showFriends ? 'text-primary border-b-2 border-primary' : 'text-gray-600'}`}
-                                    onClick={() => navigate('/dashboard/chat', { state: { showFriends: true } })}
+                                    onClick={() => navigate('/player/chat', { state: { showFriends: true } })}
                                 >
                                     <HiUsers className="w-6 h-6 mx-auto" />
                                     <span className="text-sm">Teman</span>
@@ -97,7 +104,7 @@ const MainLayout = ({ userType, userToken, userData, onLogout }) => {
                                     userToken={userToken} 
                                     onNavigate={handleNavigation}
                                     onStartPrivateChat={(userId) => {
-                                        navigate('/dashboard/chat', { state: { showFriends: false } });
+                                        navigate('/player/chat', { state: { showFriends: false } });
                                         setTimeout(() => {
                                             window.dispatchEvent(new CustomEvent('startPrivateChat', { detail: { userId } }));
                                         }, 100);
@@ -116,7 +123,7 @@ const MainLayout = ({ userType, userToken, userData, onLogout }) => {
                             onUserUpdate={setUser} 
                             onNavigate={handleNavigation}
                             onStartPrivateChat={(userId) => {
-                                navigate('/dashboard/chat', { state: { showFriends: false } });
+                                navigate('/player/chat', { state: { showFriends: false } });
                                 setTimeout(() => {
                                     window.dispatchEvent(new CustomEvent('startPrivateChat', { detail: { userId } }));
                                 }, 100);
@@ -132,6 +139,13 @@ const MainLayout = ({ userType, userToken, userData, onLogout }) => {
                     } />
                     <Route path="/community/:communityId" element={
                         <CommunityDetailPage 
+                            userToken={userToken} 
+                            onNavigate={handleNavigation}
+                            onBack={handleBack}
+                        />
+                    } />
+                    <Route path="/matchmakingStatus" element={
+                        <MatchmakingStatusPage 
                             userToken={userToken} 
                             onNavigate={handleNavigation}
                             onBack={handleBack}
@@ -620,4 +634,4 @@ const HomePage = ({ user, userToken, onNavigate }) => {
     );
 };
 
-export default MainLayout; 
+export default MainLayout;
